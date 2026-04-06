@@ -1,6 +1,6 @@
 # Roadmap Status
 
-**Last updated:** 2026-04-05
+**Last updated:** 2026-04-06
 **Target:** `praxis v1.0.0` — stable public Go API for enterprise agent orchestration
 
 ## Phase Status
@@ -10,23 +10,25 @@
 | 0 | Seed Context | starting baseline (amendable via decision-log amendment) | 1 (`docs/PRAXIS-SEED-CONTEXT.md`) |
 | 1 | API Scope and Positioning | **approved** | 7 (`00-plan.md`, `01-decisions-log.md`, `02-positioning-and-principles.md`, `03-non-goals.md`, `04-v1-freeze-surface.md`, `05-seed-question-resolutions.md`, `06-composition-patterns.md`, `REVIEW.md`) |
 | 2 | Core Runtime Design | **approved** | 8 (`00-plan.md`, `01-decisions-log.md`, `02-state-machine.md`, `03-streaming-and-events.md`, `04-cancellation-and-context.md`, `05-concurrency-model.md`, `06-state-machine-invariants.md`, `REVIEW.md`) |
-| 3 | Interface Contracts | not-started | — |
+| 3 | Interface Contracts | **approved** | 14 (`00-plan.md`, `01-decisions-log.md`, `02-orchestrator-api.md`, `03-llm-provider.md`, `04-hooks-and-filters.md`, `05-budget-interfaces.md`, `06-tools-and-invocation-context.md`, `07-errors-and-classifier.md`, `08-telemetry-interfaces.md`, `09-credentials-and-identity.md`, `10-state-types.md`, `11-defaults-and-construction.md`, `go-architect-package-layout.md`, `REVIEW.md`) |
 | 4 | Observability and Error Model | not-started | — |
 | 5 | Security and Trust Boundaries | not-started | — |
 | 6 | Release, Versioning and Community Governance | not-started | — |
 
 ## Adopted Decisions
 
-**28 of 30 allocated decisions adopted** across Phases 1–2. Phase 1 owns
+**50 of 52 allocated decisions adopted** across Phases 1–3. Phase 1 owns
 D01–D15 (D15 released unused); Phase 2 owns D15–D30 (D15–D28 adopted,
-D29/D30 released unused). Next range opens at **D31** for Phase 3.
+D29/D30 released unused); Phase 3 owns D31–D52 (D31–D52 adopted).
+Next range opens at **D53** for Phase 4.
 
 - **Phase 1 (approved):** D01–D14 adopted. D15 released.
-- **Phase 2 (approved):** D15–D28 adopted (note: Phase 2's D15 is a
-  distinct decision from the Phase 1 reserve of the same ID — Phase 2
-  allocated a fresh D15 as the first decision of its own range). D29, D30
-  released.
-- **Phase 3–6:** no decisions allocated yet.
+- **Phase 2 (approved):** D15–D28 adopted. D29, D30 released.
+- **Phase 3 (approved):** D31–D52 adopted. D51 resolved the package layout
+  (facade in `orchestrator/` sub-package, types in root). D52 recorded
+  three seed amendments (interface→struct, 21-event vocabulary, PriceProvider
+  promotion).
+- **Phase 4–6:** no decisions allocated yet.
 
 Adopted decisions remain **amendable** via the protocol recorded in
 `docs/phase-1-api-scope/01-decisions-log.md#amendment-protocol`. The
@@ -105,37 +107,62 @@ Phase 2 also recorded five forward-carried concerns for Phase 3/4/5:
   `credentials.Resolver.Fetch` (Phase 5 contract requirement).
 - **C5** — `golang.org/x/sync/errgroup` recorded as a runtime dependency.
 
-Phase 2 addressed all four IMPORTANT reviewer findings (parallel dispatch
-event semantics, `PolicyHook.Decision` constraint, cancel-during-`PreHook`
-event sequence pin, soft/hard discriminant correction) in-place before
+Phase 2 addressed all four IMPORTANT reviewer findings in-place before
 `REVIEW.md` was issued. Verdict: **READY**.
+
+**Phase 3 — Interface Contracts (approved).** 22 decisions (D31–D52):
+
+- **D31 — `EventType` typed string** (`type EventType string`). Grep-friendly,
+  JSON-serializable. 21 named constants (19 transition + 2 content-analysis).
+- **D32 — `InvocationEvent` in root package** (amended by D51: facade moved
+  to `orchestrator/` sub-package; types remain in root).
+- **D33 — `Decision` struct** with `Verdict` enum + `Metadata map[string]any`.
+  Four verdicts: Allow, Deny, RequireApproval, Log.
+- **D34 — `budget.Guard`** dimension-additive (`RecordTokens`, `RecordToolCall`,
+  `RecordCost`) plus `Check` and `Snapshot`. CP3-compliant.
+- **D35 — `BudgetSnapshot`** value struct: 5 consumption fields + `ExceededDimension`.
+- **D36 — `InvocationContext`** struct: ID, budget, span, identity, metadata. No
+  tool name (D06).
+- **D37 — Constructor** `orchestrator.New(provider, opts...)` with 12 `With*`
+  options. Concrete `*Orchestrator` struct (D52a amends seed §5 interface).
+- **D38 — Request/Result** shapes: 7-field request, 5-field result.
+- **D39 — `ApprovalRequiredError`** with `ApprovalSnapshot` (messages, original
+  request, budget, approval metadata). HTTP 202.
+- **D40 — `ToolResult`** with `Err error` for CP5 typed-error propagation.
+- **D41 — `llm.Provider`** 5 methods. `Stream` returns channel.
+- **D42 — Filter returns** `(filtered, []FilterDecision, error)`.
+- **D43 — `state.State`** `uint8` iota; `Transitions(s)` function.
+- **D44 — `Classifier.Classify(error) TypedError`** with identity rule for CP5.
+- **D45 — `credentials.Resolver`** `Fetch(ctx, CredentialRef) (Credential, error)`.
+- **D46 — `identity.Signer`** `Sign(ctx, invocationID, toolName) (string, error)`
+  (stable-v0.x-candidate).
+- **D47 — `PriceProvider`** promoted to `frozen-v1.0`.
+- **D48 — No `Close()`** on Orchestrator.
+- **D49 — UUIDv7** invocation IDs.
+- **D50 — Resume** = fresh `Invoke` (confirms D07).
+- **D51 — Package layout** facade in `orchestrator/`; OPEN-1 import cycle
+  resolved via PolicyInput projection fields.
+- **D52 — Seed amendments** interface→struct, 21 events, PriceProvider promotion.
+
+Phase 3 reviewer surfaced 2 blockers and 7 important findings; all resolved
+in-place via D51/D52. Verdict: **READY**.
 
 ## Open Decisions
 
-No open decisions in Phases 1–2. All decisions from Phase 3 onwards
-remain unallocated.
+No open decisions in Phases 1–3.
 
-- **Phase 3 (Interface Contracts) — open.** Must allocate: final Go
-  method signatures for all 14 v1.0 interfaces, the `hooks.PolicyHook`
-  `Decision` type shape per D17 constraints, the `InvocationEvent` struct
-  field set per D18, the `BudgetSnapshot` struct (value-copyable, cheap
-  to allocate), the `state.State` Go representation with the D16 adjacency
-  table, the `ApprovalRequiredError` concrete type with conversation
-  snapshot field, confirmation of whether resume is a fresh `Invoke` or a
-  dedicated method, D10 module-path resolution before any godoc is
-  written.
 - **Phase 4 (Observability and Error Model) — open.** Must allocate:
   OTel span tree and C1 resolution for `internal/ctxutil.DetachedWithSpan`,
   Prometheus metric set and cardinality constraints, slog redaction rules,
-  error-to-event mapping, taxonomy updated to eight concrete types per
-  D07, `BudgetExceededError` documentation of the C3 token-dimension
-  overshoot caveat.
+  error-to-event mapping, `BudgetExceededError` C3 token-overshoot
+  documentation, emission semantics for `EventTypePIIRedacted` and
+  `EventTypePromptInjectionSuspected` (D52b), `FilterDecision` → event
+  mapping, CP1 span child-of semantics, CP2 `parent_invocation_id`,
+  CP5 classifier precedence rules.
 - **Phase 5 (Security and Trust) — open.** Must allocate: credential
-  zero-on-close mechanics, `credentials.Resolver.Fetch` contract including
-  C4 `context.WithoutCancel` requirement on soft-cancel grace, conversation
-  snapshot redaction assessment (joint with Phase 3 per D17 constraint),
-  `identity.Signer` JWT claim set and key lifecycle, promotion to
-  `frozen-v1.0`.
+  zero-on-close mechanics, `credentials.Resolver.Fetch` soft-cancel
+  `context.WithoutCancel` requirement (C4), `identity.Signer` JWT claim
+  set and key lifecycle, promotion to `frozen-v1.0`, CP6 identity chaining.
 - **Phase 6 (Release and Governance) — open.** Must allocate: semver
   deprecation windows, release-please configuration, CI pipeline including
   banned-identifier grep, D10 tripwire enforcement, bus-factor mitigation
@@ -144,16 +171,14 @@ remain unallocated.
 ## Risks / Blockers
 
 - **D10 external dependency** (carried from Phase 1). Name/module-path
-  resolution is conditional; Phase 3 tripwire mitigates godoc exposure,
-  but v0.1.0 tag is gated on resolution.
-- **Parallel tool-call completion visibility gap** (Phase 2 C2). Phase
-  3's `InvocationEvent` godoc must state explicitly that per-tool
-  completion ordering is not preserved in the event stream under parallel
-  dispatch. If Phase 3 forgets to document this, v1.0 consumers will be
-  surprised.
-- **Soft freeze promotions.** `budget.PriceProvider` (Phase 3) and
-  `identity.Signer` (Phase 5) promotions to `frozen-v1.0` are soft
-  commitments. Phase 6 release must hard-gate both before v0.5.0.
+  resolution is conditional. Phase 3 used `MODULE_PATH_TBD` throughout;
+  v0.1.0 tag is gated on resolution.
+- **C2 documented** (Phase 2). Phase 3 `InvocationEvent` godoc in
+  `08-telemetry-interfaces.md` explicitly states that per-tool completion
+  ordering is not preserved under parallel dispatch. Risk mitigated.
+- **`identity.Signer` promotion** remains the sole `stable-v0.x-candidate`.
+  Phase 5 must finalize JWT claim set and promote before v0.5.0. Phase 6
+  release must hard-gate this.
 - **Bus factor** (seed §14.1). Flagged for Phase 6.
 - **First production consumer dependency** (seed §8 v1.0.0 criterion).
   v1.0.0 tag is gated on a production consumer shipping against v0.5.x.
@@ -162,34 +187,32 @@ remain unallocated.
 ## Decoupling Contract Health
 
 **PASS.** A case-insensitive word-bounded grep against the seed §6.1
-banned-identifier set returns zero matches across all Phase 1 and Phase 2
-artifacts as actual identifiers. Four occurrences exist in Phase 2 files —
-all are negation-mentions inside compliance declarations in
-`03-streaming-and-events.md` §7 and one risk statement in `00-plan.md`.
-Verified twice: once by the reviewer subagent, once independently in the
-`review-phase` pass. The literal banned-identifier pattern is not embedded
-in any document; the authoritative list lives in seed §6.1.
+banned-identifier set returns zero matches across all Phase 1, Phase 2,
+and Phase 3 artifacts as actual identifiers. Occurrences are limited to
+negation-mentions inside compliance declarations in review files. Verified
+by the reviewer subagent in each phase pass.
 
 The decoupling contract is a correctness invariant, not an amendable
 decision.
 
 ## Next Step
 
-Invoke `plan-phase` on **Phase 3 — Interface Contracts**. Phase 3 must
-consume Phase 2's runtime contract in full, especially D17's
-`Decision`-type constraint block, D18's `InvocationEvent` field set, D25's
-`BudgetSnapshot` shape requirement (value-copyable, cheap), and the C1–C5
-concerns carried forward. Decision range opens at D31.
+Invoke `plan-phase` on **Phase 4 — Observability and Error Model**. Phase 4
+must consume Phase 3's interface contracts in full, especially the 21
+`EventType` constants (D52b), the `LifecycleEventEmitter.Emit` contract,
+the `AttributeEnricher.Enrich` contract, the `Classifier` precedence rules
+(CP5), the `FilterDecision` type (D42), and the forward-carried concerns
+C1 (span re-attachment), C3 (token overshoot), CP1 (nested span child-of),
+and CP2 (parent_invocation_id). Decision range opens at D53.
 
 ## Overall Status
 
-Planning is on track: Phases 1 and 2 of 6 are approved with a clean
-decoupling contract and 28 adopted decisions; four design phases remain
+Planning is on track: Phases 1–3 of 6 are approved with a clean
+decoupling contract and 50 adopted decisions; three design phases remain
 before implementation begins. **v0.1.0** (first working invocation)
-requires Phase 3 complete plus D10 resolution. **v0.5.0** (feature
-complete) requires all six phases approved plus both
-`stable-v0.x-candidate` interfaces promoted to `frozen-v1.0`. **v1.0.0**
-(API freeze) further requires a production consumer to ship against a
-v0.5.x tag — a dependency outside any design phase. Adopted decisions in
-every phase remain amendable via the protocol recorded in each phase's
-decision log.
+requires Phase 4 minimum plus D10 resolution. **v0.5.0** (feature
+complete) requires all six phases approved plus `identity.Signer` promoted
+to `frozen-v1.0` (the sole remaining candidate). **v1.0.0** (API freeze)
+further requires a production consumer to ship against a v0.5.x tag — a
+dependency outside any design phase. Adopted decisions in every phase
+remain amendable via the protocol recorded in each phase's decision log.
