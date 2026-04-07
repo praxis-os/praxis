@@ -32,13 +32,13 @@ import (
 // return stub error results because no tool invoker is configured.
 func runInvocation(
 	ctx context.Context,
-	provider llm.Provider,
+	o *Orchestrator,
 	model string,
 	maxIterations int,
 	req invocation.InvocationRequest,
 ) (invocation.InvocationResult, error) {
 	machine := state.NewMachine()
-	classifier := errors.NewDefaultClassifier()
+	classifier := o.classifier
 
 	// Step 1: Created → Initializing
 	if err := machine.Transition(state.Initializing); err != nil {
@@ -87,7 +87,7 @@ func runInvocation(
 			Tools:    req.Tools,
 		}
 
-		resp, providerErr := provider.Complete(ctx, llmReq)
+		resp, providerErr := o.provider.Complete(ctx, llmReq)
 		if providerErr != nil {
 			if ctx.Err() != nil {
 				typed := classifier.Classify(ctx.Err())
@@ -141,7 +141,7 @@ func runInvocation(
 			}, nil
 
 		case llm.StopReasonToolUse:
-			toolResultMsg, err := handleToolCalls(resp.Message)
+			toolResultMsg, err := handleToolCalls(ctx, o, resp.Message)
 			if err != nil {
 				_ = machine.Transition(state.Failed)
 				return invocation.InvocationResult{
@@ -198,9 +198,10 @@ func runInvocation(
 	}, sysErr
 }
 
-// handleToolCalls extracts tool calls from the assistant message and returns
-// a user message containing stub tool results.
-func handleToolCalls(msg llm.Message) (llm.Message, error) {
+// handleToolCalls extracts tool calls from the assistant message, dispatches
+// each via the orchestrator's tool invoker, and returns a user message
+// containing the collected tool results.
+func handleToolCalls(ctx context.Context, o *Orchestrator, msg llm.Message) (llm.Message, error) {
 	var resultParts []llm.MessagePart
 
 	for _, part := range msg.Parts {
@@ -208,10 +209,19 @@ func handleToolCalls(msg llm.Message) (llm.Message, error) {
 			continue
 		}
 		tc := part.ToolCall
+
+		result, err := o.toolInvoker.Invoke(ctx, *tc)
+		if err != nil {
+			// Framework-level invoker failure — treat as system error.
+			return llm.Message{}, errors.NewSystemError(
+				fmt.Sprintf("tool invoker failure for call %q", tc.CallID), err,
+			)
+		}
+
 		resultParts = append(resultParts, llm.ToolResultPart(&llm.LLMToolResult{
-			CallID:  tc.CallID,
-			Content: "no tool invoker configured",
-			IsError: true,
+			CallID:  result.CallID,
+			Content: result.Content,
+			IsError: result.IsError,
 		}))
 	}
 

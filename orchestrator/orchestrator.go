@@ -6,8 +6,15 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/praxis-os/praxis/budget"
+	"github.com/praxis-os/praxis/credentials"
+	"github.com/praxis-os/praxis/errors"
+	"github.com/praxis-os/praxis/hooks"
+	"github.com/praxis-os/praxis/identity"
 	"github.com/praxis-os/praxis/invocation"
 	"github.com/praxis-os/praxis/llm"
+	"github.com/praxis-os/praxis/telemetry"
+	"github.com/praxis-os/praxis/tools"
 )
 
 const (
@@ -26,38 +33,64 @@ type Orchestrator struct {
 	defaultModel  string
 	maxIterations int
 
-	// Future extension points (placeholders for upcoming tasks):
-	// toolInvoker        tools.Invoker
-	// policyHooks        []hooks.PolicyHook
-	// preLLMFilters      []hooks.PreLLMFilter
-	// postToolFilters    []hooks.PostToolFilter
-	// budgetGuard        budget.Guard
-	// telemetryEmitter   telemetry.LifecycleEventEmitter
-	// metricsRecorder    telemetry.MetricsRecorder
-	// credentialResolver credentials.Resolver
-	// identitySigner     identity.Signer
+	toolInvoker        tools.Invoker
+	policyHook         hooks.PolicyHook
+	preLLMFilter       hooks.PreLLMFilter
+	postToolFilter     hooks.PostToolFilter
+	budgetGuard        budget.Guard
+	priceProvider      budget.PriceProvider
+	lifecycleEmitter   telemetry.LifecycleEventEmitter
+	attributeEnricher  telemetry.AttributeEnricher
+	credentialResolver credentials.Resolver
+	identitySigner     identity.Signer
+	classifier         errors.Classifier
 }
 
 // New creates an Orchestrator backed by the given provider.
 //
 // provider must not be nil; New returns a non-nil error if it is.
-// Options are applied in order after defaults are set.
+// Options are applied in order after defaults are set. If any option returns
+// an error, New returns that error immediately.
 //
 // Default values:
 //   - maxIterations: 10
 //   - defaultModel: "" (provider's own default)
+//   - toolInvoker: tools.NullInvoker{}
+//   - policyHook: hooks.AllowAllPolicyHook{}
+//   - preLLMFilter: hooks.NoOpPreLLMFilter{}
+//   - postToolFilter: hooks.NoOpPostToolFilter{}
+//   - budgetGuard: budget.NullGuard{}
+//   - priceProvider: budget.NullPriceProvider{}
+//   - lifecycleEmitter: telemetry.NullEmitter{}
+//   - attributeEnricher: telemetry.NullEnricher{}
+//   - credentialResolver: credentials.NullResolver{}
+//   - identitySigner: identity.NullSigner{}
+//   - classifier: errors.DefaultClassifier{}
 func New(provider llm.Provider, opts ...Option) (*Orchestrator, error) {
 	if provider == nil {
 		return nil, fmt.Errorf("orchestrator: provider must not be nil")
 	}
 
 	o := &Orchestrator{
-		provider:      provider,
-		maxIterations: defaultMaxIterations,
+		provider:           provider,
+		maxIterations:      defaultMaxIterations,
+		toolInvoker:        tools.NullInvoker{},
+		policyHook:         hooks.AllowAllPolicyHook{},
+		preLLMFilter:       hooks.NoOpPreLLMFilter{},
+		postToolFilter:     hooks.NoOpPostToolFilter{},
+		budgetGuard:        budget.NullGuard{},
+		priceProvider:      budget.NullPriceProvider{},
+		lifecycleEmitter:   telemetry.NullEmitter{},
+		attributeEnricher:  telemetry.NullEnricher{},
+		credentialResolver: credentials.NullResolver{},
+		identitySigner:     identity.NullSigner{},
+		classifier:         errors.NewDefaultClassifier(),
 	}
 
 	for _, opt := range opts {
-		opt(o)
+		if err := opt(o); err != nil {
+			return nil, err
+		}
 	}
 
 	return o, nil
@@ -86,5 +119,5 @@ func (o *Orchestrator) Invoke(ctx context.Context, req invocation.InvocationRequ
 		maxIter = o.maxIterations
 	}
 
-	return runInvocation(ctx, o.provider, model, maxIter, req)
+	return runInvocation(ctx, o, model, maxIter, req)
 }
