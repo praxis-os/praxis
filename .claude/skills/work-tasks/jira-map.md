@@ -41,49 +41,49 @@
 | S28 | PRAX-36 | PRAX-8 | Governance & Docs v1.0 |
 
 ## Subtasks — v0.1.0
-| ID | Key | Story | Title |
-|----|-----|-------|-------|
-| T1.1 | PRAX-37 | PRAX-9 | Create go.mod with confirmed module path |
-| T1.2 | PRAX-38 | PRAX-9 | Create Makefile with standard targets |
-| T1.3 | PRAX-39 | PRAX-9 | Configure CI pipeline |
-| T1.4 | PRAX-40 | PRAX-9 | Configure branch protection on main |
-| T1.5 | PRAX-41 | PRAX-9 | Configure release-please |
-| T2.1 | PRAX-42 | PRAX-10 | Define State type with 14 constants |
-| T2.2 | PRAX-43 | PRAX-10 | Transition allow-list table |
-| T2.3 | PRAX-44 | PRAX-10 | Machine interface and implementation |
-| T2.4 | PRAX-45 | PRAX-10 | Property-based tests (10k iterations) |
-| T2.5 | PRAX-46 | PRAX-10 | 21 state machine invariants |
-| T3.1 | PRAX-47 | PRAX-11 | InvocationRequest and InvocationResult types |
-| T3.2 | PRAX-48 | PRAX-11 | orchestrator.New constructor |
-| T3.3 | PRAX-49 | PRAX-11 | Invocation loop driver |
-| T3.4 | PRAX-50 | PRAX-11 | With* option functions |
-| T3.5 | PRAX-51 | PRAX-11 | Sync invocation e2e tests |
-| T4.1 | PRAX-52 | PRAX-12 | TypedError interface |
-| T4.2 | PRAX-53 | PRAX-12 | 8 concrete error types |
-| T4.3 | PRAX-54 | PRAX-12 | Classifier with retry policy |
-| T4.4 | PRAX-55 | PRAX-12 | internal/retry with backoff and jitter |
-| T5.1 | PRAX-56 | PRAX-13 | llm.Provider interface |
-| T5.2 | PRAX-57 | PRAX-13 | LLM message and tool types |
-| T5.3 | PRAX-58 | PRAX-13 | Anthropic provider implementation |
-| T5.4 | PRAX-59 | PRAX-13 | Mock provider for testing |
-| T5.5 | PRAX-60 | PRAX-13 | Anthropic provider smoke test |
-| T6.1 | PRAX-61 | PRAX-14 | tools.NullInvoker |
-| T6.2 | PRAX-62 | PRAX-14 | hooks.AllowAllPolicyHook |
-| T6.3 | PRAX-63 | PRAX-14 | NoOpPreLLMFilter and NoOpPostToolFilter |
-| T6.4 | PRAX-64 | PRAX-14 | budget.NullGuard and NullPriceProvider |
-| T6.5 | PRAX-65 | PRAX-14 | telemetry.NullEmitter and NullEnricher |
-| T6.6 | PRAX-66 | PRAX-14 | credentials.NullResolver |
-| T6.7 | PRAX-67 | PRAX-14 | identity.NullSigner |
-| T7.1 | PRAX-68 | PRAX-15 | README.md |
-| T7.2 | PRAX-69 | PRAX-15 | examples/minimal/ runnable |
-| T7.3 | PRAX-70 | PRAX-15 | CONTRIBUTING.md |
-| T7.4 | PRAX-71 | PRAX-15 | SECURITY.md |
-| T7.5 | PRAX-72 | PRAX-15 | CODE_OF_CONDUCT.md and DCO |
-| T7.6 | PRAX-73 | PRAX-15 | SPDX headers on all .go files |
-| T7.7 | PRAX-74 | PRAX-15 | LICENSE file |
-| T8.1 | PRAX-75 | PRAX-16 | 85% line coverage |
-| T8.2 | PRAX-76 | PRAX-16 | make check passes |
-| T8.3 | PRAX-77 | PRAX-16 | CHANGELOG.md via release-please |
+| ID | Key | Story | Title | Status | PR |
+|----|-----|-------|-------|--------|----|
+| T1.1 | PRAX-37 | PRAX-9 | Create go.mod with confirmed module path | Done | merged |
+| T1.2 | PRAX-38 | PRAX-9 | Create Makefile with standard targets | Done | merged |
+| T1.3 | PRAX-39 | PRAX-9 | Configure CI pipeline | To Do | — |
+| T1.4 | PRAX-40 | PRAX-9 | Configure branch protection on main | To Do | — |
+| T1.5 | PRAX-41 | PRAX-9 | Configure release-please | To Do | — |
+| T2.1 | PRAX-42 | PRAX-10 | Define State type with 14 constants | Done | [#2](https://github.com/praxis-os/praxis/pull/2) merged |
+| T2.2 | PRAX-43 | PRAX-10 | Transition allow-list table | Done | included in T2.1 |
+| T2.3 | PRAX-44 | PRAX-10 | Machine interface and implementation | Done | [#3](https://github.com/praxis-os/praxis/pull/3) |
+| T2.4 | PRAX-45 | PRAX-10 | Property-based tests (10k iterations) | To Do | — |
+| T2.5 | PRAX-46 | PRAX-10 | 21 state machine invariants | To Do | — |
+| T3.1 | PRAX-47 | PRAX-11 | InvocationRequest and InvocationResult types | To Do | — |
+| T3.2 | PRAX-48 | PRAX-11 | orchestrator.New constructor | To Do | — |
+| T3.3 | PRAX-49 | PRAX-11 | Invocation loop driver | To Do | — |
+| T3.4 | PRAX-50 | PRAX-11 | With* option functions | To Do | — |
+| T3.5 | PRAX-51 | PRAX-11 | Sync invocation e2e tests | To Do | — |
+| T4.1 | PRAX-52 | PRAX-12 | TypedError interface | To Do | — |
+| T4.2 | PRAX-53 | PRAX-12 | 8 concrete error types | To Do | — |
+| T4.3 | PRAX-54 | PRAX-12 | Classifier with retry policy | To Do | — |
+| T4.4 | PRAX-55 | PRAX-12 | internal/retry with backoff and jitter | To Do | — |
+| T5.1 | PRAX-56 | PRAX-13 | llm.Provider interface | To Do | — |
+| T5.2 | PRAX-57 | PRAX-13 | LLM message and tool types | To Do | — |
+| T5.3 | PRAX-58 | PRAX-13 | Anthropic provider implementation | To Do | — |
+| T5.4 | PRAX-59 | PRAX-13 | Mock provider for testing | To Do | — |
+| T5.5 | PRAX-60 | PRAX-13 | Anthropic provider smoke test | To Do | — |
+| T6.1 | PRAX-61 | PRAX-14 | tools.NullInvoker | To Do | — |
+| T6.2 | PRAX-62 | PRAX-14 | hooks.AllowAllPolicyHook | To Do | — |
+| T6.3 | PRAX-63 | PRAX-14 | NoOpPreLLMFilter and NoOpPostToolFilter | To Do | — |
+| T6.4 | PRAX-64 | PRAX-14 | budget.NullGuard and NullPriceProvider | To Do | — |
+| T6.5 | PRAX-65 | PRAX-14 | telemetry.NullEmitter and NullEnricher | To Do | — |
+| T6.6 | PRAX-66 | PRAX-14 | credentials.NullResolver | To Do | — |
+| T6.7 | PRAX-67 | PRAX-14 | identity.NullSigner | To Do | — |
+| T7.1 | PRAX-68 | PRAX-15 | README.md | To Do | — |
+| T7.2 | PRAX-69 | PRAX-15 | examples/minimal/ runnable | To Do | — |
+| T7.3 | PRAX-70 | PRAX-15 | CONTRIBUTING.md | To Do | — |
+| T7.4 | PRAX-71 | PRAX-15 | SECURITY.md | To Do | — |
+| T7.5 | PRAX-72 | PRAX-15 | CODE_OF_CONDUCT.md and DCO | To Do | — |
+| T7.6 | PRAX-73 | PRAX-15 | SPDX headers on all .go files | To Do | — |
+| T7.7 | PRAX-74 | PRAX-15 | LICENSE file | To Do | — |
+| T8.1 | PRAX-75 | PRAX-16 | 85% line coverage | To Do | — |
+| T8.2 | PRAX-76 | PRAX-16 | make check passes | To Do | — |
+| T8.3 | PRAX-77 | PRAX-16 | CHANGELOG.md via release-please | To Do | — |
 
 ## Subtasks — v0.3.0
 | ID | Key | Story | Title |
