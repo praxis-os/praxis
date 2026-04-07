@@ -8,7 +8,6 @@ import (
 
 	"github.com/praxis-os/praxis/invocation"
 	"github.com/praxis-os/praxis/llm"
-	"github.com/praxis-os/praxis/state"
 )
 
 const (
@@ -72,14 +71,20 @@ func New(provider llm.Provider, opts ...Option) (*Orchestrator, error) {
 //
 // Invoke respects ctx cancellation at each blocking point. A cancelled
 // context causes the invocation to terminate with a [state.Cancelled]
-// terminal state and a [errors.CancellationError].
-//
-// NOTE: This is a stub implementation. The real invocation loop will be
-// implemented in T3.3. Until then, Invoke always returns a Failed result.
-func (o *Orchestrator) Invoke(_ context.Context, _ invocation.InvocationRequest) (invocation.InvocationResult, error) {
-	err := fmt.Errorf("orchestrator: Invoke not yet implemented")
-	return invocation.InvocationResult{
-		FinalState: state.Failed,
-		Error:      err,
-	}, err
+// terminal state and a CancellationError.
+func (o *Orchestrator) Invoke(ctx context.Context, req invocation.InvocationRequest) (invocation.InvocationResult, error) {
+	model := req.Model
+	if model == "" {
+		model = o.defaultModel
+	}
+	if model == "" {
+		return invocation.InvocationResult{}, fmt.Errorf("orchestrator: no model configured: set WithDefaultModel or InvocationRequest.Model")
+	}
+
+	maxIter := req.MaxIterations
+	if maxIter <= 0 {
+		maxIter = o.maxIterations
+	}
+
+	return runInvocation(ctx, o.provider, model, maxIter, req)
 }

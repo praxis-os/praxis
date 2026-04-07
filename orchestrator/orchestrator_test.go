@@ -4,88 +4,212 @@ package orchestrator_test
 
 import (
 	"context"
-	"strings"
+	"fmt"
 	"testing"
 
 	"github.com/praxis-os/praxis/invocation"
 	"github.com/praxis-os/praxis/llm"
+	"github.com/praxis-os/praxis/llm/mock"
 	"github.com/praxis-os/praxis/orchestrator"
 	"github.com/praxis-os/praxis/state"
 )
 
-// stubProvider is a minimal llm.Provider implementation for testing.
-type stubProvider struct{}
-
-func (s *stubProvider) Complete(_ context.Context, _ llm.LLMRequest) (llm.LLMResponse, error) {
-	return llm.LLMResponse{}, nil
-}
-
-func (s *stubProvider) Stream(_ context.Context, _ llm.LLMRequest) (<-chan llm.LLMStreamChunk, error) {
-	ch := make(chan llm.LLMStreamChunk)
-	close(ch)
-	return ch, nil
-}
-
-func (s *stubProvider) Name() string                    { return "stub" }
-func (s *stubProvider) SupportsParallelToolCalls() bool { return false }
-func (s *stubProvider) Capabilities() llm.Capabilities  { return llm.Capabilities{} }
-
 func TestNew_ValidProvider(t *testing.T) {
-	orch, err := orchestrator.New(&stubProvider{})
+	o, err := orchestrator.New(mock.NewSimple("hello"))
 	if err != nil {
-		t.Fatalf("New with valid provider: unexpected error: %v", err)
+		t.Fatalf("New: unexpected error: %v", err)
 	}
-	if orch == nil {
-		t.Fatal("New with valid provider: returned nil Orchestrator")
+	if o == nil {
+		t.Fatal("New: returned nil orchestrator")
 	}
 }
 
 func TestNew_NilProvider(t *testing.T) {
-	orch, err := orchestrator.New(nil)
+	_, err := orchestrator.New(nil)
 	if err == nil {
-		t.Fatal("New with nil provider: expected error, got nil")
-	}
-	if orch != nil {
-		t.Fatal("New with nil provider: expected nil Orchestrator, got non-nil")
+		t.Fatal("New(nil): expected error, got nil")
 	}
 }
 
-func TestNew_DefaultMaxIterations(t *testing.T) {
-	// Validate the default via the Invoke stub which exercises the struct,
-	// and also indirectly through WithMaxIterations clamping behaviour.
-	// We probe the default by supplying no WithMaxIterations option and
-	// confirming we can create the orchestrator without error.
-	orch, err := orchestrator.New(&stubProvider{})
+func TestInvoke_SimpleTextResponse(t *testing.T) {
+	p := mock.NewSimple("the answer is 42")
+	o, _ := orchestrator.New(p, orchestrator.WithDefaultModel("test-model"))
+
+	result, err := o.Invoke(context.Background(), invocation.InvocationRequest{
+		Messages: []llm.Message{{Role: llm.RoleUser, Parts: []llm.MessagePart{llm.TextPart("question")}}},
+	})
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("Invoke: %v", err)
 	}
-	if orch == nil {
-		t.Fatal("expected non-nil Orchestrator")
+	if result.FinalState != state.Completed {
+		t.Errorf("FinalState: want Completed, got %v", result.FinalState)
 	}
-	// The default is tested indirectly: WithMaxIterations(0) should clamp to 1,
-	// not be equal to the default of 10. We use a separate subtest below.
+	if result.Iterations != 1 {
+		t.Errorf("Iterations: want 1, got %d", result.Iterations)
+	}
+	if result.Response.StopReason != llm.StopReasonEndTurn {
+		t.Errorf("StopReason: want EndTurn, got %v", result.Response.StopReason)
+	}
 }
 
-func TestWithDefaultModel(t *testing.T) {
-	tests := []struct {
-		name  string
-		model string
-	}{
-		{name: "non-empty model", model: "claude-3-5-sonnet-20241022"},
-		{name: "empty model is a no-op", model: ""},
-	}
+func TestInvoke_ToolUseStubThenComplete(t *testing.T) {
+	p := mock.New(
+		mock.Response{
+			LLMResponse: llm.LLMResponse{
+				Message: llm.Message{
+					Role: llm.RoleAssistant,
+					Parts: []llm.MessagePart{
+						llm.ToolCallPart(&llm.LLMToolCall{CallID: "call-1", Name: "search", ArgumentsJSON: []byte(`{}`)}),
+					},
+				},
+				StopReason: llm.StopReasonToolUse,
+				Usage:      llm.TokenUsage{InputTokens: 100, OutputTokens: 20},
+			},
+		},
+		mock.Response{
+			LLMResponse: llm.LLMResponse{
+				Message: llm.Message{
+					Role:  llm.RoleAssistant,
+					Parts: []llm.MessagePart{llm.TextPart("done")},
+				},
+				StopReason: llm.StopReasonEndTurn,
+				Usage:      llm.TokenUsage{InputTokens: 150, OutputTokens: 10},
+			},
+		},
+	)
+	o, _ := orchestrator.New(p, orchestrator.WithDefaultModel("test-model"))
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			// Construction must succeed regardless of model value.
-			orch, err := orchestrator.New(&stubProvider{}, orchestrator.WithDefaultModel(tc.model))
-			if err != nil {
-				t.Fatalf("New: unexpected error: %v", err)
-			}
-			if orch == nil {
-				t.Fatal("expected non-nil Orchestrator")
-			}
-		})
+	result, err := o.Invoke(context.Background(), invocation.InvocationRequest{
+		Messages: []llm.Message{{Role: llm.RoleUser, Parts: []llm.MessagePart{llm.TextPart("do something")}}},
+	})
+	if err != nil {
+		t.Fatalf("Invoke: %v", err)
+	}
+	if result.FinalState != state.Completed {
+		t.Errorf("FinalState: want Completed, got %v", result.FinalState)
+	}
+	if result.Iterations != 2 {
+		t.Errorf("Iterations: want 2, got %d", result.Iterations)
+	}
+	if result.TokenUsage.InputTokens != 250 {
+		t.Errorf("InputTokens: want 250, got %d", result.TokenUsage.InputTokens)
+	}
+	if result.TokenUsage.OutputTokens != 30 {
+		t.Errorf("OutputTokens: want 30, got %d", result.TokenUsage.OutputTokens)
+	}
+}
+
+func TestInvoke_ProviderError(t *testing.T) {
+	p := mock.New(mock.Response{Err: fmt.Errorf("provider down")})
+	o, _ := orchestrator.New(p, orchestrator.WithDefaultModel("test-model"))
+
+	result, err := o.Invoke(context.Background(), invocation.InvocationRequest{
+		Messages: []llm.Message{{Role: llm.RoleUser, Parts: []llm.MessagePart{llm.TextPart("hi")}}},
+	})
+	if err == nil {
+		t.Fatal("expected error from provider failure")
+	}
+	if result.FinalState != state.Failed {
+		t.Errorf("FinalState: want Failed, got %v", result.FinalState)
+	}
+}
+
+func TestInvoke_ContextCancelled(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	p := mock.NewSimple("won't reach this")
+	o, _ := orchestrator.New(p, orchestrator.WithDefaultModel("test-model"))
+
+	result, err := o.Invoke(ctx, invocation.InvocationRequest{
+		Messages: []llm.Message{{Role: llm.RoleUser, Parts: []llm.MessagePart{llm.TextPart("hi")}}},
+	})
+	if err == nil {
+		t.Fatal("expected error from cancelled context")
+	}
+	if result.FinalState != state.Cancelled {
+		t.Errorf("FinalState: want Cancelled, got %v", result.FinalState)
+	}
+}
+
+func TestInvoke_MaxIterationsExceeded(t *testing.T) {
+	responses := make([]mock.Response, 5)
+	for i := range responses {
+		responses[i] = mock.Response{
+			LLMResponse: llm.LLMResponse{
+				Message: llm.Message{
+					Role: llm.RoleAssistant,
+					Parts: []llm.MessagePart{
+						llm.ToolCallPart(&llm.LLMToolCall{CallID: fmt.Sprintf("c%d", i), Name: "tool", ArgumentsJSON: []byte(`{}`)}),
+					},
+				},
+				StopReason: llm.StopReasonToolUse,
+				Usage:      llm.TokenUsage{InputTokens: 10, OutputTokens: 5},
+			},
+		}
+	}
+	p := mock.New(responses...)
+	o, _ := orchestrator.New(p, orchestrator.WithDefaultModel("test-model"), orchestrator.WithMaxIterations(3))
+
+	result, err := o.Invoke(context.Background(), invocation.InvocationRequest{
+		Messages: []llm.Message{{Role: llm.RoleUser, Parts: []llm.MessagePart{llm.TextPart("hi")}}},
+	})
+	if err == nil {
+		t.Fatal("expected error from max iterations exceeded")
+	}
+	if result.FinalState != state.Failed {
+		t.Errorf("FinalState: want Failed, got %v", result.FinalState)
+	}
+	if result.Iterations != 3 {
+		t.Errorf("Iterations: want 3, got %d", result.Iterations)
+	}
+}
+
+func TestInvoke_DefaultModelUsed(t *testing.T) {
+	p := mock.NewSimple("ok")
+	o, _ := orchestrator.New(p, orchestrator.WithDefaultModel("my-model"))
+
+	_, err := o.Invoke(context.Background(), invocation.InvocationRequest{
+		Messages: []llm.Message{{Role: llm.RoleUser, Parts: []llm.MessagePart{llm.TextPart("hi")}}},
+	})
+	if err != nil {
+		t.Fatalf("Invoke: %v", err)
+	}
+	calls := p.Calls()
+	if len(calls) != 1 {
+		t.Fatalf("expected 1 call, got %d", len(calls))
+	}
+	if calls[0].Model != "my-model" {
+		t.Errorf("Model: want my-model, got %q", calls[0].Model)
+	}
+}
+
+func TestInvoke_RequestModelOverridesDefault(t *testing.T) {
+	p := mock.NewSimple("ok")
+	o, _ := orchestrator.New(p, orchestrator.WithDefaultModel("default-model"))
+
+	_, err := o.Invoke(context.Background(), invocation.InvocationRequest{
+		Model:    "override-model",
+		Messages: []llm.Message{{Role: llm.RoleUser, Parts: []llm.MessagePart{llm.TextPart("hi")}}},
+	})
+	if err != nil {
+		t.Fatalf("Invoke: %v", err)
+	}
+	calls := p.Calls()
+	if calls[0].Model != "override-model" {
+		t.Errorf("Model: want override-model, got %q", calls[0].Model)
+	}
+}
+
+func TestInvoke_NoModelConfigured(t *testing.T) {
+	p := mock.NewSimple("ok")
+	o, _ := orchestrator.New(p)
+
+	_, err := o.Invoke(context.Background(), invocation.InvocationRequest{
+		Messages: []llm.Message{{Role: llm.RoleUser, Parts: []llm.MessagePart{llm.TextPart("hi")}}},
+	})
+	if err == nil {
+		t.Fatal("expected error when no model configured")
 	}
 }
 
@@ -93,68 +217,20 @@ func TestWithMaxIterations_Clamping(t *testing.T) {
 	tests := []struct {
 		name  string
 		input int
-		// We cannot directly inspect maxIterations since it is unexported.
-		// We verify the option is accepted without error and that extreme
-		// values do not panic.
-		wantErr bool
 	}{
-		{name: "below minimum clamps to 1", input: 0},
-		{name: "negative clamps to 1", input: -5},
-		{name: "exactly 1 is valid", input: 1},
-		{name: "nominal value", input: 10},
-		{name: "exactly 100 is valid", input: 100},
-		{name: "above maximum clamps to 100", input: 101},
-		{name: "large value clamps to 100", input: 99999},
+		{"below minimum", -5},
+		{"zero", 0},
+		{"exactly 1", 1},
+		{"nominal", 10},
+		{"exactly 100", 100},
+		{"above maximum", 200},
 	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			orch, err := orchestrator.New(&stubProvider{}, orchestrator.WithMaxIterations(tc.input))
-			if (err != nil) != tc.wantErr {
-				t.Fatalf("New: wantErr=%v, got err=%v", tc.wantErr, err)
-			}
-			if !tc.wantErr && orch == nil {
-				t.Fatal("expected non-nil Orchestrator")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := orchestrator.New(mock.NewSimple("ok"), orchestrator.WithMaxIterations(tt.input), orchestrator.WithDefaultModel("m"))
+			if err != nil {
+				t.Fatalf("New: %v", err)
 			}
 		})
-	}
-}
-
-func TestInvoke_StubReturnsNotImplemented(t *testing.T) {
-	orch, err := orchestrator.New(&stubProvider{})
-	if err != nil {
-		t.Fatalf("New: unexpected error: %v", err)
-	}
-
-	result, err := orch.Invoke(context.Background(), invocation.InvocationRequest{})
-
-	if err == nil {
-		t.Fatal("Invoke stub: expected non-nil error")
-	}
-	if !strings.Contains(err.Error(), "not yet implemented") {
-		t.Errorf("Invoke stub: error message should contain %q, got: %q", "not yet implemented", err.Error())
-	}
-	if result.FinalState != state.Failed {
-		t.Errorf("Invoke stub: FinalState = %v, want %v", result.FinalState, state.Failed)
-	}
-	if result.Error == nil {
-		t.Error("Invoke stub: result.Error should be non-nil")
-	}
-}
-
-func TestNew_MultipleOptions(t *testing.T) {
-	// Verify options compose correctly and the last write wins.
-	orch, err := orchestrator.New(
-		&stubProvider{},
-		orchestrator.WithDefaultModel("model-v1"),
-		orchestrator.WithDefaultModel("model-v2"), // should win
-		orchestrator.WithMaxIterations(5),
-		orchestrator.WithMaxIterations(25), // should win
-	)
-	if err != nil {
-		t.Fatalf("New with multiple options: unexpected error: %v", err)
-	}
-	if orch == nil {
-		t.Fatal("expected non-nil Orchestrator")
 	}
 }
