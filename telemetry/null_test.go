@@ -10,13 +10,13 @@ import (
 	"github.com/praxis-os/praxis/telemetry"
 )
 
-func TestInterfaces(t *testing.T) {
+func TestInterfaces(_ *testing.T) {
 	// Compile-time checks documented as runtime assertions.
 	var _ telemetry.LifecycleEventEmitter = telemetry.NullEmitter{}
 	var _ telemetry.AttributeEnricher = telemetry.NullEnricher{}
 }
 
-func TestNullEmitter_Emit(t *testing.T) {
+func TestNullEmitter_Emit(_ *testing.T) {
 	emitter := telemetry.NullEmitter{}
 
 	// Emit must not panic for any input.

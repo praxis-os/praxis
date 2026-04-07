@@ -613,3 +613,394 @@ func TestProvider_WithHTTPClient(t *testing.T) {
 		t.Fatalf("Complete() error = %v", err)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// fromAPIStopReason edge cases
+// ---------------------------------------------------------------------------
+
+func stopReasonBody(t *testing.T, stopReason string) []byte {
+	t.Helper()
+	resp := map[string]any{
+		"id":            "msg_03test",
+		"type":          "message",
+		"role":          "assistant",
+		"model":         "claude-sonnet-4-20250514",
+		"stop_reason":   stopReason,
+		"stop_sequence": nil,
+		"content":       []map[string]any{{"type": "text", "text": "ok"}},
+		"usage":         map[string]any{"input_tokens": 1, "output_tokens": 1},
+	}
+	b, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("stopReasonBody: marshal: %v", err)
+	}
+	return b
+}
+
+func TestFromAPIStopReason(t *testing.T) {
+	tests := []struct {
+		apiReason  string
+		wantReason llm.StopReason
+	}{
+		{"end_turn", llm.StopReasonEndTurn},
+		{"tool_use", llm.StopReasonToolUse},
+		{"max_tokens", llm.StopReasonMaxTokens},
+		{"stop_sequence", llm.StopReasonStopSequence},
+		{"unknown_future_reason", llm.StopReasonEndTurn}, // default fallback
+		{"", llm.StopReasonEndTurn},                      // empty string fallback
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.apiReason, func(t *testing.T) {
+			srv := newTestServer(t, http.StatusOK, stopReasonBody(t, tc.apiReason), nil)
+			p := anthropic.New("test-key", anthropic.WithBaseURL(srv.URL))
+
+			req := llm.LLMRequest{
+				Messages: []llm.Message{
+					{Role: llm.RoleUser, Parts: []llm.MessagePart{llm.TextPart("hi")}},
+				},
+			}
+
+			resp, err := p.Complete(context.Background(), req)
+			if err != nil {
+				t.Fatalf("Complete() error = %v", err)
+			}
+			if resp.StopReason != tc.wantReason {
+				t.Errorf("StopReason = %q; want %q", resp.StopReason, tc.wantReason)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// toAPIContent error paths
+// ---------------------------------------------------------------------------
+
+func TestProvider_Complete_ToolCallNilToolCall(t *testing.T) {
+	srv := newTestServer(t, http.StatusOK, successBody(t, "ok"), nil)
+	p := anthropic.New("test-key", anthropic.WithBaseURL(srv.URL))
+
+	req := llm.LLMRequest{
+		Messages: []llm.Message{
+			{
+				Role: llm.RoleAssistant,
+				Parts: []llm.MessagePart{
+					// PartTypeToolCall with nil ToolCall — should error.
+					{Type: llm.PartTypeToolCall, ToolCall: nil},
+				},
+			},
+		},
+	}
+
+	_, err := p.Complete(context.Background(), req)
+	if err == nil {
+		t.Fatal("expected error for nil ToolCall; got nil")
+	}
+}
+
+func TestProvider_Complete_ToolResultNilToolResult(t *testing.T) {
+	srv := newTestServer(t, http.StatusOK, successBody(t, "ok"), nil)
+	p := anthropic.New("test-key", anthropic.WithBaseURL(srv.URL))
+
+	req := llm.LLMRequest{
+		Messages: []llm.Message{
+			{
+				Role: llm.RoleTool,
+				Parts: []llm.MessagePart{
+					// PartTypeToolResult with nil ToolResult — should error.
+					{Type: llm.PartTypeToolResult, ToolResult: nil},
+				},
+			},
+		},
+	}
+
+	_, err := p.Complete(context.Background(), req)
+	if err == nil {
+		t.Fatal("expected error for nil ToolResult; got nil")
+	}
+}
+
+func TestProvider_Complete_ImageURLNotSupported(t *testing.T) {
+	srv := newTestServer(t, http.StatusOK, successBody(t, "ok"), nil)
+	p := anthropic.New("test-key", anthropic.WithBaseURL(srv.URL))
+
+	req := llm.LLMRequest{
+		Messages: []llm.Message{
+			{
+				Role: llm.RoleUser,
+				Parts: []llm.MessagePart{
+					{Type: llm.PartTypeImageURL, Text: "https://example.com/img.png"},
+				},
+			},
+		},
+	}
+
+	_, err := p.Complete(context.Background(), req)
+	if err == nil {
+		t.Fatal("expected error for PartTypeImageURL; got nil")
+	}
+}
+
+func TestProvider_Complete_UnknownPartType(t *testing.T) {
+	srv := newTestServer(t, http.StatusOK, successBody(t, "ok"), nil)
+	p := anthropic.New("test-key", anthropic.WithBaseURL(srv.URL))
+
+	req := llm.LLMRequest{
+		Messages: []llm.Message{
+			{
+				Role: llm.RoleUser,
+				Parts: []llm.MessagePart{
+					{Type: llm.PartType("unknown_future_type"), Text: "data"},
+				},
+			},
+		},
+	}
+
+	_, err := p.Complete(context.Background(), req)
+	if err == nil {
+		t.Fatal("expected error for unknown part type; got nil")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// toAPIRole error path
+// ---------------------------------------------------------------------------
+
+func TestProvider_Complete_UnsupportedRole(t *testing.T) {
+	srv := newTestServer(t, http.StatusOK, successBody(t, "ok"), nil)
+	p := anthropic.New("test-key", anthropic.WithBaseURL(srv.URL))
+
+	req := llm.LLMRequest{
+		Messages: []llm.Message{
+			// llm.RoleSystem is filtered out before toAPIRole; use a truly
+			// unknown role string to reach the default branch.
+			{
+				Role:  llm.Role("unsupported_role"),
+				Parts: []llm.MessagePart{llm.TextPart("hi")},
+			},
+		},
+	}
+
+	_, err := p.Complete(context.Background(), req)
+	if err == nil {
+		t.Fatal("expected error for unsupported role; got nil")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// provider.Complete error paths
+// ---------------------------------------------------------------------------
+
+// TestProvider_Complete_NetworkError exercises the transient error path taken
+// when httpClient.Do returns a non-context error (e.g. connection refused).
+func TestProvider_Complete_NetworkError(t *testing.T) {
+	// Point the provider at a port that immediately refuses connections.
+	p := anthropic.New("test-key", anthropic.WithBaseURL("http://127.0.0.1:1"))
+
+	req := llm.LLMRequest{
+		Messages: []llm.Message{
+			{Role: llm.RoleUser, Parts: []llm.MessagePart{llm.TextPart("hi")}},
+		},
+	}
+
+	_, err := p.Complete(context.Background(), req)
+	if err == nil {
+		t.Fatal("expected network error; got nil")
+	}
+
+	var te praxiserrors.TypedError
+	if !errors.As(err, &te) {
+		t.Fatalf("error does not implement TypedError: %T", err)
+	}
+	if te.Kind() != praxiserrors.ErrorKindTransientLLM {
+		t.Errorf("Kind() = %q; want %q", te.Kind(), praxiserrors.ErrorKindTransientLLM)
+	}
+}
+
+// TestProvider_Complete_InvalidJSONResponse exercises the JSON decode error
+// path when the server returns 200 but with an invalid body.
+func TestProvider_Complete_InvalidJSONResponse(t *testing.T) {
+	srv := newTestServer(t, http.StatusOK, []byte(`not-valid-json`), nil)
+	p := anthropic.New("test-key", anthropic.WithBaseURL(srv.URL))
+
+	req := llm.LLMRequest{
+		Messages: []llm.Message{
+			{Role: llm.RoleUser, Parts: []llm.MessagePart{llm.TextPart("hi")}},
+		},
+	}
+
+	_, err := p.Complete(context.Background(), req)
+	if err == nil {
+		t.Fatal("expected decode error; got nil")
+	}
+
+	var te praxiserrors.TypedError
+	if !errors.As(err, &te) {
+		t.Fatalf("error does not implement TypedError: %T", err)
+	}
+	if te.Kind() != praxiserrors.ErrorKindTransientLLM {
+		t.Errorf("Kind() = %q; want %q", te.Kind(), praxiserrors.ErrorKindTransientLLM)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// withRetryAfter — non-numeric Retry-After (HTTP-date format)
+// ---------------------------------------------------------------------------
+
+func TestProvider_Complete_RetryAfterHTTPDate(t *testing.T) {
+	errorBody := []byte(`{"type":"error","error":{"type":"rate_limit_error","message":"rate limited"}}`)
+	// Retry-After with an HTTP-date value (non-numeric).
+	extraHdrs := map[string]string{"retry-after": "Wed, 21 Oct 2025 07:28:00 GMT"}
+	srv := newTestServer(t, http.StatusTooManyRequests, errorBody, extraHdrs)
+	p := anthropic.New("test-key", anthropic.WithBaseURL(srv.URL))
+
+	req := llm.LLMRequest{
+		Messages: []llm.Message{
+			{Role: llm.RoleUser, Parts: []llm.MessagePart{llm.TextPart("hi")}},
+		},
+	}
+
+	_, err := p.Complete(context.Background(), req)
+	if err == nil {
+		t.Fatal("expected rate-limit error; got nil")
+	}
+
+	var te praxiserrors.TypedError
+	if !errors.As(err, &te) {
+		t.Fatalf("error does not implement TypedError: %T", err)
+	}
+	if te.Kind() != praxiserrors.ErrorKindTransientLLM {
+		t.Errorf("Kind() = %q; want %q", te.Kind(), praxiserrors.ErrorKindTransientLLM)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// mapHTTPError — 5xx catch-all branch (e.g. 504 Gateway Timeout)
+// ---------------------------------------------------------------------------
+
+func TestProvider_Complete_HTTP504IsTransient(t *testing.T) {
+	errorBody := []byte(`{"type":"error","error":{"type":"server_error","message":"gateway timeout"}}`)
+	srv := newTestServer(t, http.StatusGatewayTimeout, errorBody, nil)
+	p := anthropic.New("test-key", anthropic.WithBaseURL(srv.URL))
+
+	req := llm.LLMRequest{
+		Messages: []llm.Message{
+			{Role: llm.RoleUser, Parts: []llm.MessagePart{llm.TextPart("hi")}},
+		},
+	}
+
+	_, err := p.Complete(context.Background(), req)
+	if err == nil {
+		t.Fatal("expected error; got nil")
+	}
+
+	var te praxiserrors.TypedError
+	if !errors.As(err, &te) {
+		t.Fatalf("error does not implement TypedError: %T", err)
+	}
+	if te.Kind() != praxiserrors.ErrorKindTransientLLM {
+		t.Errorf("Kind() = %q; want %q", te.Kind(), praxiserrors.ErrorKindTransientLLM)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// toAPIRequest — Temperature field and tool with empty schema
+// ---------------------------------------------------------------------------
+
+func TestProvider_Complete_TemperatureIsForwarded(t *testing.T) {
+	cs := newCaptureServer(t, successBody(t, "ok"))
+	p := anthropic.New("test-key", anthropic.WithBaseURL(cs.URL))
+
+	req := llm.LLMRequest{
+		Temperature: 0.7,
+		Messages: []llm.Message{
+			{Role: llm.RoleUser, Parts: []llm.MessagePart{llm.TextPart("hi")}},
+		},
+	}
+
+	_, err := p.Complete(context.Background(), req)
+	if err != nil {
+		t.Fatalf("Complete() error = %v", err)
+	}
+
+	if cs.LastRequest == nil {
+		t.Fatal("no request captured")
+	}
+	temp, ok := (*cs.LastRequest)["temperature"].(float64)
+	if !ok {
+		t.Fatal("temperature field missing or wrong type")
+	}
+	if temp != 0.7 {
+		t.Errorf("temperature = %v; want 0.7", temp)
+	}
+}
+
+func TestProvider_Complete_ToolWithEmptySchema(t *testing.T) {
+	cs := newCaptureServer(t, successBody(t, "ok"))
+	p := anthropic.New("test-key", anthropic.WithBaseURL(cs.URL))
+
+	req := llm.LLMRequest{
+		Messages: []llm.Message{
+			{Role: llm.RoleUser, Parts: []llm.MessagePart{llm.TextPart("hi")}},
+		},
+		Tools: []llm.ToolDefinition{
+			{
+				Name:        "no_schema_tool",
+				Description: "A tool with no input schema",
+				InputSchema: nil, // empty schema — should be replaced with default
+			},
+		},
+	}
+
+	_, err := p.Complete(context.Background(), req)
+	if err != nil {
+		t.Fatalf("Complete() error = %v", err)
+	}
+
+	if cs.LastRequest == nil {
+		t.Fatal("no request captured")
+	}
+	tools, ok := (*cs.LastRequest)["tools"].([]any)
+	if !ok || len(tools) == 0 {
+		t.Fatal("tools field missing or empty")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// toAPIContent — ToolCall with empty ArgumentsJSON uses default {}
+// ---------------------------------------------------------------------------
+
+func TestProvider_Complete_ToolCallEmptyArguments(t *testing.T) {
+	cs := newCaptureServer(t, successBody(t, "ok"))
+	p := anthropic.New("test-key", anthropic.WithBaseURL(cs.URL))
+
+	req := llm.LLMRequest{
+		Messages: []llm.Message{
+			{
+				Role: llm.RoleAssistant,
+				Parts: []llm.MessagePart{
+					llm.ToolCallPart(&llm.LLMToolCall{
+						CallID:        "toolu_empty",
+						Name:          "noop",
+						ArgumentsJSON: nil, // empty — should default to {}
+					}),
+				},
+			},
+			// Follow up with a tool result so the conversation is valid.
+			{
+				Role: llm.RoleTool,
+				Parts: []llm.MessagePart{
+					llm.ToolResultPart(&llm.LLMToolResult{
+						CallID:  "toolu_empty",
+						Content: "done",
+					}),
+				},
+			},
+		},
+	}
+
+	_, err := p.Complete(context.Background(), req)
+	if err != nil {
+		t.Fatalf("Complete() error = %v", err)
+	}
+}

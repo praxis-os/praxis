@@ -38,7 +38,6 @@ func runInvocation(
 	req invocation.InvocationRequest,
 ) (invocation.InvocationResult, error) {
 	machine := state.NewMachine()
-	classifier := o.classifier
 
 	// Step 1: Created → Initializing
 	if err := machine.Transition(state.Initializing); err != nil {
@@ -69,15 +68,8 @@ func runInvocation(
 		}
 
 		// Check context cancellation before making the LLM call.
-		if err := ctx.Err(); err != nil {
-			typed := classifier.Classify(err)
-			_ = machine.Transition(state.Cancelled)
-			return invocation.InvocationResult{
-				FinalState: machine.State(),
-				Iterations: iterations,
-				TokenUsage: usage,
-				Error:      typed,
-			}, typed
+		if result, cancelled, err := checkCancellation(ctx, o, machine, iterations, usage); cancelled {
+			return result, err
 		}
 
 		// Build and dispatch the LLM request.
@@ -89,24 +81,7 @@ func runInvocation(
 
 		resp, providerErr := o.provider.Complete(ctx, llmReq)
 		if providerErr != nil {
-			if ctx.Err() != nil {
-				typed := classifier.Classify(ctx.Err())
-				_ = machine.Transition(state.Cancelled)
-				return invocation.InvocationResult{
-					FinalState: machine.State(),
-					Iterations: iterations,
-					TokenUsage: usage,
-					Error:      typed,
-				}, typed
-			}
-			typed := classifier.Classify(providerErr)
-			_ = machine.Transition(state.Failed)
-			return invocation.InvocationResult{
-				FinalState: machine.State(),
-				Iterations: iterations,
-				TokenUsage: usage,
-				Error:      typed,
-			}, typed
+			return handleProviderError(ctx, o, machine, iterations, usage, providerErr)
 		}
 
 		// Accumulate token usage.
@@ -124,64 +99,12 @@ func runInvocation(
 		// Append the assistant's response to the conversation.
 		messages = append(messages, resp.Message)
 
-		// Inspect stop reason.
-		switch resp.StopReason {
-		case llm.StopReasonEndTurn, llm.StopReasonMaxTokens, llm.StopReasonStopSequence:
-			if err := machine.Transition(state.PostHook); err != nil {
-				return failResult(machine, errors.NewSystemError("transition to PostHook failed", err))
-			}
-			if err := machine.Transition(state.Completed); err != nil {
-				return failResult(machine, errors.NewSystemError("transition to Completed failed", err))
-			}
-			return invocation.InvocationResult{
-				Response:   resp,
-				FinalState: state.Completed,
-				Iterations: iterations,
-				TokenUsage: usage,
-			}, nil
-
-		case llm.StopReasonToolUse:
-			toolResultMsg, err := handleToolCalls(ctx, o, resp.Message)
-			if err != nil {
-				_ = machine.Transition(state.Failed)
-				return invocation.InvocationResult{
-					FinalState: machine.State(),
-					Iterations: iterations,
-					TokenUsage: usage,
-					Error:      err,
-				}, err
-			}
-
-			if tErr := machine.Transition(state.ToolCall); tErr != nil {
-				return failResult(machine, errors.NewSystemError("transition to ToolCall failed", tErr))
-			}
-
-			messages = append(messages, toolResultMsg)
-
-			if tErr := machine.Transition(state.PostToolFilter); tErr != nil {
-				return failResult(machine, errors.NewSystemError("transition to PostToolFilter failed", tErr))
-			}
-
-			if tErr := machine.Transition(state.LLMContinuation); tErr != nil {
-				return failResult(machine, errors.NewSystemError("transition to LLMContinuation failed", tErr))
-			}
-
-			continue
-
-		default:
-			if err := machine.Transition(state.PostHook); err != nil {
-				return failResult(machine, errors.NewSystemError("transition to PostHook failed", err))
-			}
-			if err := machine.Transition(state.Completed); err != nil {
-				return failResult(machine, errors.NewSystemError("transition to Completed failed", err))
-			}
-			return invocation.InvocationResult{
-				Response:   resp,
-				FinalState: state.Completed,
-				Iterations: iterations,
-				TokenUsage: usage,
-			}, nil
+		// Inspect stop reason and act accordingly.
+		done, newMessages, result, err := handleStopReason(ctx, o, machine, resp, messages, iterations, usage)
+		if done {
+			return result, err
 		}
+		messages = newMessages
 	}
 
 	// Max iterations exhausted.
@@ -196,6 +119,133 @@ func runInvocation(
 		TokenUsage: usage,
 		Error:      sysErr,
 	}, sysErr
+}
+
+// checkCancellation checks whether ctx is already cancelled and, if so,
+// transitions the machine to Cancelled and returns a populated result.
+// The cancelled return value reports whether the caller should return immediately.
+func checkCancellation(
+	ctx context.Context,
+	o *Orchestrator,
+	machine *state.Machine,
+	iterations int,
+	usage invocation.TokenUsage,
+) (invocation.InvocationResult, bool, error) {
+	if ctx.Err() == nil {
+		return invocation.InvocationResult{}, false, nil
+	}
+	typed := o.classifier.Classify(ctx.Err())
+	_ = machine.Transition(state.Cancelled)
+	return invocation.InvocationResult{
+		FinalState: machine.State(),
+		Iterations: iterations,
+		TokenUsage: usage,
+		Error:      typed,
+	}, true, typed
+}
+
+// handleProviderError maps a provider error to the appropriate terminal state
+// (Cancelled when the context is done, Failed otherwise) and returns the result.
+func handleProviderError(
+	ctx context.Context,
+	o *Orchestrator,
+	machine *state.Machine,
+	iterations int,
+	usage invocation.TokenUsage,
+	providerErr error,
+) (invocation.InvocationResult, error) {
+	if ctx.Err() != nil {
+		typed := o.classifier.Classify(ctx.Err())
+		_ = machine.Transition(state.Cancelled)
+		return invocation.InvocationResult{
+			FinalState: machine.State(),
+			Iterations: iterations,
+			TokenUsage: usage,
+			Error:      typed,
+		}, typed
+	}
+	typed := o.classifier.Classify(providerErr)
+	_ = machine.Transition(state.Failed)
+	return invocation.InvocationResult{
+		FinalState: machine.State(),
+		Iterations: iterations,
+		TokenUsage: usage,
+		Error:      typed,
+	}, typed
+}
+
+// handleStopReason processes the LLM response's stop reason.
+// It returns done=true when the loop should exit, together with the final
+// result and error. When done=false, newMessages contains the updated
+// conversation to continue with.
+func handleStopReason(
+	ctx context.Context,
+	o *Orchestrator,
+	machine *state.Machine,
+	resp llm.LLMResponse,
+	messages []llm.Message,
+	iterations int,
+	usage invocation.TokenUsage,
+) (done bool, newMessages []llm.Message, result invocation.InvocationResult, err error) {
+	switch resp.StopReason {
+	case llm.StopReasonEndTurn, llm.StopReasonMaxTokens, llm.StopReasonStopSequence:
+		result, err = completeInvocation(machine, resp, iterations, usage)
+		return true, nil, result, err
+
+	case llm.StopReasonToolUse:
+		toolResultMsg, toolErr := handleToolCalls(ctx, o, resp.Message)
+		if toolErr != nil {
+			_ = machine.Transition(state.Failed)
+			r := invocation.InvocationResult{
+				FinalState: machine.State(),
+				Iterations: iterations,
+				TokenUsage: usage,
+				Error:      toolErr,
+			}
+			return true, nil, r, toolErr
+		}
+
+		if tErr := machine.Transition(state.ToolCall); tErr != nil {
+			r, e := failResult(machine, errors.NewSystemError("transition to ToolCall failed", tErr))
+			return true, nil, r, e
+		}
+		messages = append(messages, toolResultMsg)
+		if tErr := machine.Transition(state.PostToolFilter); tErr != nil {
+			r, e := failResult(machine, errors.NewSystemError("transition to PostToolFilter failed", tErr))
+			return true, nil, r, e
+		}
+		if tErr := machine.Transition(state.LLMContinuation); tErr != nil {
+			r, e := failResult(machine, errors.NewSystemError("transition to LLMContinuation failed", tErr))
+			return true, nil, r, e
+		}
+		return false, messages, invocation.InvocationResult{}, nil
+
+	default:
+		result, err = completeInvocation(machine, resp, iterations, usage)
+		return true, nil, result, err
+	}
+}
+
+// completeInvocation transitions the machine through PostHook → Completed and
+// returns the final successful result.
+func completeInvocation(
+	machine *state.Machine,
+	resp llm.LLMResponse,
+	iterations int,
+	usage invocation.TokenUsage,
+) (invocation.InvocationResult, error) {
+	if err := machine.Transition(state.PostHook); err != nil {
+		return failResult(machine, errors.NewSystemError("transition to PostHook failed", err))
+	}
+	if err := machine.Transition(state.Completed); err != nil {
+		return failResult(machine, errors.NewSystemError("transition to Completed failed", err))
+	}
+	return invocation.InvocationResult{
+		Response:   resp,
+		FinalState: state.Completed,
+		Iterations: iterations,
+		TokenUsage: usage,
+	}, nil
 }
 
 // handleToolCalls extracts tool calls from the assistant message, dispatches

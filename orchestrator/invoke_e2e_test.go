@@ -223,7 +223,7 @@ func TestE2E_ParallelToolCalls(t *testing.T) {
 // TestE2E_ToolInvokerFrameworkError verifies that when the tool invoker returns
 // a non-nil framework error (not IsError), the invocation fails with a SystemError.
 func TestE2E_ToolInvokerFrameworkError(t *testing.T) {
-	inv := funcInvoker(func(_ context.Context, call llm.LLMToolCall) (llm.LLMToolResult, error) {
+	inv := funcInvoker(func(_ context.Context, _ llm.LLMToolCall) (llm.LLMToolResult, error) {
 		return llm.LLMToolResult{}, fmt.Errorf("invoker crashed: connection refused")
 	})
 
@@ -407,7 +407,7 @@ func TestE2E_ContextCancelledDuringToolCall(t *testing.T) {
 
 	tc1 := &llm.LLMToolCall{CallID: "slow-call", Name: "slow_tool", ArgumentsJSON: []byte(`{}`)}
 
-	inv := funcInvoker(func(ctx context.Context, call llm.LLMToolCall) (llm.LLMToolResult, error) {
+	inv := funcInvoker(func(ctx context.Context, _ llm.LLMToolCall) (llm.LLMToolResult, error) {
 		// Cancel the context mid-tool, then return the context error.
 		cancel()
 		return llm.LLMToolResult{}, ctx.Err()

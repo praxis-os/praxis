@@ -35,3 +35,6 @@ issues:
   exclude-dirs:
     - vendor
     - examples
+  exclude-rules:
+    - linters: [revive]
+      text: "stutters"

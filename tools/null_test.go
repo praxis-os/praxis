@@ -10,7 +10,7 @@ import (
 	"github.com/praxis-os/praxis/tools"
 )
 
-func TestNullInvoker_ImplementsInvoker(t *testing.T) {
+func TestNullInvoker_ImplementsInvoker(_ *testing.T) {
 	// Compile-time check duplicated here as a documentation test.
 	var _ tools.Invoker = tools.NullInvoker{}
 }

@@ -1,0 +1,26 @@
+name: CodeQL
+
+# CodeQL is informational (not a required merge check).
+# Findings are visible in the Security tab and must be triaged within 7 days (D85).
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly on Monday at 05:00 UTC
+    - cron: "0 5 * * 1"
+
+jobs:
+  analyze:
+    name: analyze
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: go
+      - uses: github/codeql-action/autobuild@v3
+      - uses: github/codeql-action/analyze@v3

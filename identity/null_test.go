@@ -9,7 +9,7 @@ import (
 	"github.com/praxis-os/praxis/identity"
 )
 
-func TestNullSigner_ImplementsSigner(t *testing.T) {
+func TestNullSigner_ImplementsSigner(_ *testing.T) {
 	var _ identity.Signer = identity.NullSigner{}
 }
 

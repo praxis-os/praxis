@@ -108,7 +108,7 @@ func DoWithConfig(ctx context.Context, classifier errors.Classifier, cfg Config,
 // defaults and package-level defaults.
 //
 // Priority for each field: cfg non-zero > classifier policy > package default.
-func resolveConfig(cfg Config, classifier errors.Classifier) (maxAttempts int, baseDelay, maxDelay time.Duration) {
+func resolveConfig(cfg Config, _ errors.Classifier) (maxAttempts int, baseDelay, maxDelay time.Duration) {
 	// Obtain the policy for the most common retryable kind to seed defaults.
 	policy := errors.RetryPolicyFor(errors.ErrorKindTransientLLM)
 
@@ -154,7 +154,7 @@ func computeDelay(attempt int, baseDelay, maxDelay time.Duration) time.Duration 
 	if shift > 62 {
 		shift = 62
 	}
-	exp := baseDelay * (1 << uint(shift))
+	exp := baseDelay * (1 << uint(shift)) //nolint:gosec // shift is capped at 62; no overflow
 
 	// Cap at maxDelay.
 	if exp > maxDelay || exp < 0 { // exp < 0 catches overflow
@@ -164,7 +164,7 @@ func computeDelay(attempt int, baseDelay, maxDelay time.Duration) time.Duration 
 	// Add jitter in [0, exp*0.5).
 	jitterBound := exp / 2
 	if jitterBound > 0 {
-		jitter := time.Duration(rand.Int64N(int64(jitterBound)))
+		jitter := time.Duration(rand.Int64N(int64(jitterBound))) //nolint:gosec // jitter does not need cryptographic randomness; int64 cast is bounded by jitterBound
 		exp += jitter
 	}
 

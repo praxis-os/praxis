@@ -178,7 +178,7 @@ func TestClassifierPrecedenceIdentityBeforeContext(t *testing.T) {
 	}
 }
 
-func TestClassifierImplementsInterface(t *testing.T) {
+func TestClassifierImplementsInterface(_ *testing.T) {
 	var _ Classifier = (*DefaultClassifier)(nil)
 }
 

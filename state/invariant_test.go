@@ -17,6 +17,8 @@ import (
 	"testing"
 )
 
+const msgTerminalImmutable = "terminal state is immutable"
+
 // ---------------------------------------------------------------------------
 // Graph helpers used across multiple invariant tests.
 // ---------------------------------------------------------------------------
@@ -154,8 +156,8 @@ func TestInvariant_INV02_TerminalImmutability(t *testing.T) {
 				if !errors.As(err, &te) {
 					t.Errorf("INV-02: Transition(%s→%s) returned %T, want *TransitionError", terminal, next, err)
 				}
-				if te.Msg != "terminal state is immutable" {
-					t.Errorf("INV-02: TransitionError.Msg = %q, want %q", te.Msg, "terminal state is immutable")
+				if te.Msg != msgTerminalImmutable {
+					t.Errorf("INV-02: TransitionError.Msg = %q, want %q", te.Msg, msgTerminalImmutable)
 				}
 				if m.State() != terminal {
 					t.Errorf("INV-02: state changed after rejected transition: got %s, want %s", m.State(), terminal)
@@ -372,9 +374,7 @@ func TestInvariant_INV08_BudgetExceededSources(t *testing.T) {
 // terminal state.
 func TestInvariant_INV09_CancelledNotReachableFromForbiddenSources(t *testing.T) {
 	forbidden := []State{Created, Initializing, PreHook}
-	for _, src := range TerminalStates() {
-		forbidden = append(forbidden, src)
-	}
+	forbidden = append(forbidden, TerminalStates()...)
 
 	for _, src := range forbidden {
 		src := src
@@ -448,7 +448,7 @@ func TestInvariant_INV10_ToolCycleRepeatsArbitrarily(t *testing.T) {
 
 			// Expected transition count:
 			// prefix(4) + cycles(n*4) + suffix(2)
-			want := uint64(4 + n*4 + 2)
+			want := uint64(4 + n*4 + 2) //nolint:gosec // n is a small test constant; no overflow risk
 			if m.TransitionCount() != want {
 				t.Errorf("INV-10: TransitionCount = %d, want %d", m.TransitionCount(), want)
 			}

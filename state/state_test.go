@@ -76,7 +76,7 @@ func TestStateStringUnknown(t *testing.T) {
 	}
 }
 
-func TestStateStringerInterface(t *testing.T) {
+func TestStateStringerInterface(_ *testing.T) {
 	// Verify State implements fmt.Stringer.
 	var _ fmt.Stringer = Created
 }
@@ -100,7 +100,7 @@ func TestIsTerminal(t *testing.T) {
 func TestIsTerminalBranchlessProperty(t *testing.T) {
 	// The branchless property: IsTerminal iff value >= Completed (9).
 	for i := 0; i < 256; i++ {
-		s := State(i)
+		s := State(i) //nolint:gosec // i is bounded by 256 which fits in uint8
 		got := s.IsTerminal()
 		want := i >= int(Completed)
 		if got != want {

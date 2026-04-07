@@ -10,7 +10,7 @@ import (
 	"github.com/praxis-os/praxis/llm"
 )
 
-func TestInterfaces(t *testing.T) {
+func TestInterfaces(_ *testing.T) {
 	// Compile-time checks documented as runtime assertions.
 	var _ hooks.PolicyHook = hooks.AllowAllPolicyHook{}
 	var _ hooks.PreLLMFilter = hooks.NoOpPreLLMFilter{}

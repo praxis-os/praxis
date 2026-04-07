@@ -134,7 +134,7 @@ func TestTypedErrorWithCause(t *testing.T) {
 	}
 }
 
-func TestClassifierInterfaceCompiles(t *testing.T) {
+func TestClassifierInterfaceCompiles(_ *testing.T) {
 	// Verify Classifier is a valid interface (compile-time check).
 	var _ Classifier = (*stubClassifier)(nil)
 }

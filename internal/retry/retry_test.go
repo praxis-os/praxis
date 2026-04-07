@@ -270,16 +270,16 @@ func TestDoWithConfig_ZeroConfigFallsBackToDefaults(t *testing.T) {
 func TestComputeDelay_JitterWithinBounds(t *testing.T) {
 	const iterations = 1000
 	base := 100 * time.Millisecond
-	max := 30 * time.Second
+	maxDelay := 30 * time.Second
 
 	for attempt := 1; attempt <= 10; attempt++ {
 		for i := 0; i < iterations; i++ {
-			d := computeDelay(attempt, base, max)
+			d := computeDelay(attempt, base, maxDelay)
 			if d < 0 {
 				t.Fatalf("attempt %d: negative delay %v", attempt, d)
 			}
-			if d > max {
-				t.Fatalf("attempt %d: delay %v exceeds maxDelay %v", attempt, d, max)
+			if d > maxDelay {
+				t.Fatalf("attempt %d: delay %v exceeds maxDelay %v", attempt, d, maxDelay)
 			}
 		}
 	}
@@ -287,12 +287,12 @@ func TestComputeDelay_JitterWithinBounds(t *testing.T) {
 
 func TestComputeDelay_NeverExceedsMaxDelay(t *testing.T) {
 	base := 1 * time.Second
-	max := 5 * time.Second
+	maxDelay := 5 * time.Second
 
 	for attempt := 1; attempt <= 20; attempt++ {
-		d := computeDelay(attempt, base, max)
-		if d > max {
-			t.Fatalf("attempt %d: delay %v exceeds maxDelay %v", attempt, d, max)
+		d := computeDelay(attempt, base, maxDelay)
+		if d > maxDelay {
+			t.Fatalf("attempt %d: delay %v exceeds maxDelay %v", attempt, d, maxDelay)
 		}
 	}
 }
@@ -302,14 +302,14 @@ func TestComputeDelay_ExponentialGrowth(t *testing.T) {
 	// verify that the delay for attempt N is at least baseDelay * 2^(N-1)
 	// (jitter only adds, never subtracts).
 	base := 10 * time.Millisecond
-	max := 10 * time.Second
+	maxDelay := 10 * time.Second
 
 	// Attempt 1: base * 2^0 = 10ms minimum (plus up to 5ms jitter)
 	// Attempt 2: base * 2^1 = 20ms minimum (plus up to 10ms jitter)
 	for attempt := 1; attempt <= 5; attempt++ {
 		shift := attempt - 1
-		expected := base * (1 << uint(shift))
-		d := computeDelay(attempt, base, max)
+		expected := base * (1 << uint(shift)) //nolint:gosec // shift is bounded by attempt (max 4 here); no overflow
+		d := computeDelay(attempt, base, maxDelay)
 		if d < expected {
 			t.Fatalf("attempt %d: delay %v less than expected minimum %v", attempt, d, expected)
 		}
@@ -338,10 +338,10 @@ func BenchmarkDo_SuccessFirstAttempt(b *testing.B) {
 
 func BenchmarkComputeDelay(b *testing.B) {
 	base := 100 * time.Millisecond
-	max := 30 * time.Second
+	maxDelay := 30 * time.Second
 
 	b.ResetTimer()
 	for i := range b.N {
-		_ = computeDelay((i%10)+1, base, max)
+		_ = computeDelay((i%10)+1, base, maxDelay)
 	}
 }

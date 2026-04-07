@@ -125,7 +125,7 @@ func Count() int {
 func All() []State {
 	all := make([]State, stateCount)
 	for i := range all {
-		all[i] = State(i)
+		all[i] = State(i) //nolint:gosec // i is bounded by stateCount which is < 256
 	}
 	return all
 }

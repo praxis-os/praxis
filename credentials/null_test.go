@@ -10,7 +10,7 @@ import (
 	"github.com/praxis-os/praxis/credentials"
 )
 
-func TestNullResolver_ImplementsResolver(t *testing.T) {
+func TestNullResolver_ImplementsResolver(_ *testing.T) {
 	var _ credentials.Resolver = credentials.NullResolver{}
 }
 

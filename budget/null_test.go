@@ -10,7 +10,7 @@ import (
 	"github.com/praxis-os/praxis/budget"
 )
 
-func TestInterfaces(t *testing.T) {
+func TestInterfaces(_ *testing.T) {
 	// Compile-time checks documented as runtime assertions.
 	var _ budget.Guard = budget.NullGuard{}
 	var _ budget.PriceProvider = budget.NullPriceProvider{}

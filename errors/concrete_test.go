@@ -9,7 +9,7 @@ import (
 )
 
 // TestAllConcreteTypesImplementTypedError verifies compile-time interface conformance.
-func TestAllConcreteTypesImplementTypedError(t *testing.T) {
+func TestAllConcreteTypesImplementTypedError(_ *testing.T) {
 	var _ TypedError = (*TransientLLMError)(nil)
 	var _ TypedError = (*PermanentLLMError)(nil)
 	var _ TypedError = (*ToolError)(nil)
