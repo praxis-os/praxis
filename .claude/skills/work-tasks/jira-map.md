@@ -60,7 +60,7 @@
 | T3.5 | PRAX-51 | PRAX-11 | Sync invocation e2e tests | To Do | — |
 | T4.1 | PRAX-52 | PRAX-12 | TypedError interface | Done | [#4](https://github.com/praxis-os/praxis/pull/4) |
 | T4.2 | PRAX-53 | PRAX-12 | 8 concrete error types | Done | [#5](https://github.com/praxis-os/praxis/pull/5) |
-| T4.3 | PRAX-54 | PRAX-12 | Classifier with retry policy | To Do | — |
+| T4.3 | PRAX-54 | PRAX-12 | Classifier with retry policy | Done | [#7](https://github.com/praxis-os/praxis/pull/7) |
 | T4.4 | PRAX-55 | PRAX-12 | internal/retry with backoff and jitter | To Do | — |
 | T5.1 | PRAX-56 | PRAX-13 | llm.Provider interface | Done | [#6](https://github.com/praxis-os/praxis/pull/6) |
 | T5.2 | PRAX-57 | PRAX-13 | LLM message and tool types | Done | included in T5.1 |
