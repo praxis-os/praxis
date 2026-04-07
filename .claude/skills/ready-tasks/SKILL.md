@@ -22,6 +22,13 @@ If omitted, show all milestones.
 - **Project:** `PRAX`
 - **Link type:** `Blocks` (inward = "is blocked by", outward = "blocks")
 
+## Confluence Configuration
+
+- **Cloud ID:** `dbf84607-febc-42ec-87a9-df0f3d926c0b`
+- **Space ID:** `196612` (key: `Praxis`)
+- **Readiness page ID:** `425985`
+- **Readiness page URL:** `https://francescofioredev.atlassian.net/wiki/spaces/Praxis/pages/425985/Task+Readiness+Map+v0.1.0`
+
 ## Procedure
 
 ### 1. Query open subtasks
@@ -76,8 +83,15 @@ After the tables, suggest which ready tasks to work first based on:
 Use the mapping in `.claude/skills/work-tasks/jira-map.md` to resolve Jira keys
 back to task IDs (T1.1, T2.1, etc.) for display.
 
+### 5. Update Confluence page
+
+After producing the output, update the Confluence readiness page using
+`mcp__claude_ai_Atlassian_Rovo__updateConfluencePage` with the page ID from the
+Confluence Configuration section above. This keeps the living document in sync
+without requiring a manual copy-paste.
+
 ## Guardrails
 
-- Read-only skill — never modify Jira issues
+- Read-only skill on Jira — never modify Jira issues
 - If Jira API is unreachable, report the error and stop
 - Do not show "Done" tasks unless explicitly requested
