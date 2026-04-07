@@ -58,7 +58,7 @@
 | T3.3 | PRAX-49 | PRAX-11 | Invocation loop driver | To Do | — |
 | T3.4 | PRAX-50 | PRAX-11 | With* option functions | To Do | — |
 | T3.5 | PRAX-51 | PRAX-11 | Sync invocation e2e tests | To Do | — |
-| T4.1 | PRAX-52 | PRAX-12 | TypedError interface | To Do | — |
+| T4.1 | PRAX-52 | PRAX-12 | TypedError interface | Done | [#4](https://github.com/praxis-os/praxis/pull/4) |
 | T4.2 | PRAX-53 | PRAX-12 | 8 concrete error types | To Do | — |
 | T4.3 | PRAX-54 | PRAX-12 | Classifier with retry policy | To Do | — |
 | T4.4 | PRAX-55 | PRAX-12 | internal/retry with backoff and jitter | To Do | — |
