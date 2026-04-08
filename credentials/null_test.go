@@ -15,14 +15,14 @@ func TestNullResolver_ImplementsResolver(_ *testing.T) {
 }
 
 func TestNullResolver_Fetch(t *testing.T) {
-	tests := []struct { //nolint:gosec // G101: test data, not real credentials
+	tests := []struct {
 		name        string
 		credName    string
 		wantInError string
 	}{
 		{
 			name:        "named credential returns error",
-			credName:    "ANTHROPIC_API_KEY",
+			credName:    "ANTHROPIC_API_KEY",   //nolint:gosec // G101: test data, not real credentials
 			wantInError: "ANTHROPIC_API_KEY",
 		},
 		{
