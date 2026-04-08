@@ -1,40 +1,48 @@
 # SPDX-License-Identifier: Apache-2.0
 
-run:
-  go: "1.23"
-  timeout: 5m
-
+version: "2"
 linters:
   enable:
-    - govet
-    - errcheck
-    - staticcheck
-    - gosimple
-    - unused
-    - gosec
-    - revive
-    - misspell
-    - unconvert
-    - unparam
     - bodyclose
-    - noctx
     - goconst
     - gocyclo
-
-linters-settings:
-  gocyclo:
-    min-complexity: 15
-  goconst:
-    min-len: 3
-    min-occurrences: 3
-  gosec:
-    excludes:
-      - G104  # unhandled errors on deferred Close() in tests
-
-issues:
-  exclude-dirs:
-    - vendor
-    - examples
-  exclude-rules:
-    - linters: [revive]
-      text: "stutters"
+    - gosec
+    - misspell
+    - noctx
+    - revive
+    - unconvert
+    - unparam
+  settings:
+    goconst:
+      min-len: 3
+      min-occurrences: 3
+    gocyclo:
+      min-complexity: 15
+    gosec:
+      excludes:
+        - G101
+        - G104
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - revive
+        text: stutters
+    paths:
+      - vendor
+      - examples
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

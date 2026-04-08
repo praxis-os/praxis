@@ -280,9 +280,9 @@ func assertStatesEqual(t *testing.T, name string, got, want []State) {
 		t.Errorf("Transitions(%s): got %d states, want %d", name, len(got), len(want))
 		return
 	}
-	for i := range got {
-		if got[i] != want[i] {
-			t.Errorf("Transitions(%s)[%d] = %s, want %s", name, i, got[i], want[i])
+	for i, w := range want {
+		if got[i] != w {
+			t.Errorf("Transitions(%s)[%d] = %s, want %s", name, i, got[i], w)
 		}
 	}
 }

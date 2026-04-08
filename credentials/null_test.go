@@ -22,7 +22,7 @@ func TestNullResolver_Fetch(t *testing.T) {
 	}{
 		{
 			name:        "named credential returns error",
-			credName:    "ANTHROPIC_API_KEY",
+			credName:    "ANTHROPIC_API_KEY",   //nolint:gosec // G101: test data, not real credentials
 			wantInError: "ANTHROPIC_API_KEY",
 		},
 		{
