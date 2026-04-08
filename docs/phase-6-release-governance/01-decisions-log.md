@@ -102,8 +102,12 @@ changelog quality is a public artifact that cannot be retroactively fixed.
 **Summary:** `release-type: go`, single component on `main`, with a
 `version.go` extra-file for runtime version reporting.
 
-**Decision.** release-please runs via `googleapis/release-please-action@v4` on
-pushes to `main`. Configuration:
+**Decision.** release-please runs on pushes to `main` via the official
+`release-please` CLI: `github-release` creates tags/releases from merged
+release PRs, and `release-pr` opens or updates the next release PR. This keeps
+the manifest workflow but avoids a limitation in
+`googleapis/release-please-action@v4`, which does not forward the `release-as`
+input to `Manifest.fromManifest(...)`. Configuration:
 
 ```json
 {
@@ -146,7 +150,9 @@ milestone (`v0.1.x -> v0.3.0`, `v0.3.x -> v0.5.0`). The changelog sections are
 remapped to the keep-a-changelog convention (Added/Fixed/Changed) from
 release-please's default section names. `always-update: true` is enabled so an
 existing open release PR is rewritten when the workflow-derived odd-minor
-override changes the generated version or files.
+override changes the generated version or files. The CLI path is used instead
+of the GitHub Action wrapper because praxis relies on a runtime `--release-as`
+override for odd pre-v1 milestones, and the action wrapper ignores that input.
 
 **Alternatives considered.** (a) `simple` release type — rejected; does not
 understand Go versioning conventions. (b) GoReleaser — rejected; designed for

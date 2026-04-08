@@ -365,10 +365,10 @@ jobs:
       contents: write
       pull-requests: write
     steps:
-      - uses: googleapis/release-please-action@v4
-        with:
-          config-file: release-please-config.json
-          manifest-file: .release-please-manifest.json
+      - uses: actions/checkout@v4
+      - run: .github/scripts/derive-release-as.sh
+      - run: npx -y release-please@17.1.3 github-release ...
+      - run: npx -y release-please@17.1.3 release-pr ...
 ```
 
 When the release PR is merged, release-please creates the tag and GitHub

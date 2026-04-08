@@ -14,6 +14,9 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+    env:
+      RELEASE_PLEASE_VERSION: 17.1.3
+      TARGET_BRANCH: main
     steps:
       - uses: actions/checkout@v4
         with:
@@ -23,15 +26,38 @@ jobs:
         id: derive-release-as
         run: .github/scripts/derive-release-as.sh
 
-      - uses: googleapis/release-please-action@v4
-        if: steps.derive-release-as.outputs.has_release_as != 'true'
-        with:
-          config-file: release-please-config.json
-          manifest-file: .release-please-manifest.json
+      - name: Create GitHub releases
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          npx -y release-please@${RELEASE_PLEASE_VERSION} github-release \
+            --token="${GITHUB_TOKEN}" \
+            --repo-url="${{ github.repository }}" \
+            --target-branch="${TARGET_BRANCH}" \
+            --config-file=release-please-config.json \
+            --manifest-file=.release-please-manifest.json
 
-      - uses: googleapis/release-please-action@v4
+      - name: Create or update release PR
+        if: steps.derive-release-as.outputs.has_release_as != 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          npx -y release-please@${RELEASE_PLEASE_VERSION} release-pr \
+            --token="${GITHUB_TOKEN}" \
+            --repo-url="${{ github.repository }}" \
+            --target-branch="${TARGET_BRANCH}" \
+            --config-file=release-please-config.json \
+            --manifest-file=.release-please-manifest.json
+
+      - name: Create or update release PR with override
         if: steps.derive-release-as.outputs.has_release_as == 'true'
-        with:
-          config-file: release-please-config.json
-          manifest-file: .release-please-manifest.json
-          release-as: ${{ steps.derive-release-as.outputs.release_as }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          npx -y release-please@${RELEASE_PLEASE_VERSION} release-pr \
+            --token="${GITHUB_TOKEN}" \
+            --repo-url="${{ github.repository }}" \
+            --target-branch="${TARGET_BRANCH}" \
+            --config-file=release-please-config.json \
+            --manifest-file=.release-please-manifest.json \
+            --release-as="${{ steps.derive-release-as.outputs.release_as }}"
