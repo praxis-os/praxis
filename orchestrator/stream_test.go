@@ -15,10 +15,10 @@ import (
 	"github.com/praxis-os/praxis/tools"
 )
 
-// drainEvents collects all events from the channel with a timeout.
-func drainEvents(ch <-chan event.InvocationEvent, timeout time.Duration) []event.InvocationEvent {
+// drainEvents collects all events from the channel with a 5s timeout.
+func drainEvents(ch <-chan event.InvocationEvent) []event.InvocationEvent {
 	var events []event.InvocationEvent
-	timer := time.NewTimer(timeout)
+	timer := time.NewTimer(5 * time.Second)
 	defer timer.Stop()
 	for {
 		select {
@@ -41,7 +41,7 @@ func TestInvokeStream_SimpleCompletion(t *testing.T) {
 		Messages: userMsg("hi"),
 	})
 
-	events := drainEvents(ch, 5*time.Second)
+	events := drainEvents(ch)
 	if len(events) == 0 {
 		t.Fatal("no events received")
 	}
@@ -106,7 +106,7 @@ func TestInvokeStream_ToolUseThenComplete(t *testing.T) {
 		Messages: userMsg("search something"),
 	})
 
-	events := drainEvents(ch, 5*time.Second)
+	events := drainEvents(ch)
 
 	// Verify tool-related events are present.
 	hasToolCallStarted := false
@@ -163,7 +163,7 @@ func TestInvokeStream_ContextCancel(t *testing.T) {
 		Messages: userMsg("hi"),
 	})
 
-	events := drainEvents(ch, 5*time.Second)
+	events := drainEvents(ch)
 
 	// Must have at least the started + cancelled events.
 	if len(events) < 2 {
@@ -185,7 +185,7 @@ func TestInvokeStream_ChannelClosed(t *testing.T) {
 	})
 
 	// Drain all events.
-	drainEvents(ch, 5*time.Second)
+	drainEvents(ch)
 
 	// Channel must be closed — reading should return zero value immediately.
 	select {
@@ -207,7 +207,7 @@ func TestInvokeStream_NoModelError(t *testing.T) {
 		Messages: userMsg("hi"),
 	})
 
-	events := drainEvents(ch, 5*time.Second)
+	events := drainEvents(ch)
 	if len(events) != 1 {
 		t.Fatalf("expected 1 event, got %d", len(events))
 	}
@@ -254,7 +254,7 @@ func TestInvokeStream_ExactlyOneTerminalEvent(t *testing.T) {
 		Messages: userMsg("hi"),
 	})
 
-	events := drainEvents(ch, 5*time.Second)
+	events := drainEvents(ch)
 
 	terminalCount := 0
 	for _, e := range events {

@@ -53,13 +53,13 @@ func (o *Orchestrator) runLoop(
 
 	// Step 1: Created → Initializing
 	if err := machine.Transition(state.Initializing); err != nil {
-		return o.failLoop(machine, sink, ctx, errors.NewSystemError("transition to Initializing failed", err))
+		return o.failLoop(ctx, machine, sink, errors.NewSystemError("transition to Initializing failed", err))
 	}
 	emit(event.EventTypeInvocationStarted, state.Initializing)
 
 	// Step 2: Initializing → PreHook
 	if err := machine.Transition(state.PreHook); err != nil {
-		return o.failLoop(machine, sink, ctx, errors.NewSystemError("transition to PreHook failed", err))
+		return o.failLoop(ctx, machine, sink, errors.NewSystemError("transition to PreHook failed", err))
 	}
 	emit(event.EventTypeInitialized, state.PreHook)
 	emit(event.EventTypePreHookStarted, state.PreHook)
@@ -74,7 +74,7 @@ func (o *Orchestrator) runLoop(
 	for iterations < maxTurns {
 		if firstCall {
 			if err := machine.Transition(state.LLMCall); err != nil {
-				return o.failLoop(machine, sink, ctx, errors.NewSystemError("transition to LLMCall failed", err))
+				return o.failLoop(ctx, machine, sink, errors.NewSystemError("transition to LLMCall failed", err))
 			}
 			emit(event.EventTypePreHookCompleted, state.LLMCall)
 			firstCall = false
@@ -117,33 +117,13 @@ func (o *Orchestrator) runLoop(
 
 		// Transition to ToolDecision.
 		if err := machine.Transition(state.ToolDecision); err != nil {
-			return o.failLoop(machine, sink, ctx, errors.NewSystemError("transition to ToolDecision failed", err))
+			return o.failLoop(ctx, machine, sink, errors.NewSystemError("transition to ToolDecision failed", err))
 		}
 		emit(event.EventTypeToolDecisionStarted, state.ToolDecision)
 
 		messages = append(messages, resp.Message)
 
-		switch resp.StopReason {
-		case llm.StopReasonEndTurn, llm.StopReasonMaxTokens, llm.StopReasonStopSequence:
-			// Complete: ToolDecision → PostHook → Completed
-			if err := machine.Transition(state.PostHook); err != nil {
-				return o.failLoop(machine, sink, ctx, errors.NewSystemError("transition to PostHook failed", err))
-			}
-			emit(event.EventTypePostHookStarted, state.PostHook)
-
-			if err := machine.Transition(state.Completed); err != nil {
-				return o.failLoop(machine, sink, ctx, errors.NewSystemError("transition to Completed failed", err))
-			}
-			emit(event.EventTypePostHookCompleted, state.Completed)
-
-			msg := resp.Message
-			emitTerminal(event.EventTypeInvocationCompleted, state.Completed, nil)
-			return &praxis.InvocationResult{
-				Response:   &msg,
-				FinalState: state.Completed,
-			}
-
-		case llm.StopReasonToolUse:
+		if resp.StopReason == llm.StopReasonToolUse {
 			// Tool cycle: dispatch calls, filter, continue.
 			toolResultMsg, toolErr := o.handleToolCallsWithEvents(ctx, resp.Message, machine, sink)
 			if toolErr != nil {
@@ -156,29 +136,14 @@ func (o *Orchestrator) runLoop(
 
 			// PostToolFilter → LLMContinuation
 			if err := machine.Transition(state.LLMContinuation); err != nil {
-				return o.failLoop(machine, sink, ctx, errors.NewSystemError("transition to LLMContinuation failed", err))
+				return o.failLoop(ctx, machine, sink, errors.NewSystemError("transition to LLMContinuation failed", err))
 			}
 			emit(event.EventTypeLLMContinuationStarted, state.LLMContinuation)
-
-		default:
-			// Unknown stop reason — complete.
-			if err := machine.Transition(state.PostHook); err != nil {
-				return o.failLoop(machine, sink, ctx, errors.NewSystemError("transition to PostHook failed", err))
-			}
-			emit(event.EventTypePostHookStarted, state.PostHook)
-
-			if err := machine.Transition(state.Completed); err != nil {
-				return o.failLoop(machine, sink, ctx, errors.NewSystemError("transition to Completed failed", err))
-			}
-			emit(event.EventTypePostHookCompleted, state.Completed)
-
-			msg := resp.Message
-			emitTerminal(event.EventTypeInvocationCompleted, state.Completed, nil)
-			return &praxis.InvocationResult{
-				Response:   &msg,
-				FinalState: state.Completed,
-			}
+			continue
 		}
+
+		// EndTurn, MaxTokens, StopSequence, or unknown → complete.
+		return o.completeLoop(ctx, machine, sink, emit, emitTerminal, resp.Message)
 	}
 
 	// Max turns exhausted.
@@ -189,6 +154,32 @@ func (o *Orchestrator) runLoop(
 	_ = machine.Transition(state.Failed)
 	emitTerminal(event.EventTypeInvocationFailed, state.Failed, sysErr)
 	return &praxis.InvocationResult{FinalState: state.Failed}
+}
+
+// completeLoop transitions through PostHook → Completed and emits events.
+func (o *Orchestrator) completeLoop(
+	ctx context.Context,
+	machine *state.Machine,
+	sink eventSink,
+	emit func(event.EventType, state.State),
+	emitTerminal func(event.EventType, state.State, error),
+	msg llm.Message,
+) *praxis.InvocationResult {
+	if err := machine.Transition(state.PostHook); err != nil {
+		return o.failLoop(ctx, machine, sink, errors.NewSystemError("transition to PostHook failed", err))
+	}
+	emit(event.EventTypePostHookStarted, state.PostHook)
+
+	if err := machine.Transition(state.Completed); err != nil {
+		return o.failLoop(ctx, machine, sink, errors.NewSystemError("transition to Completed failed", err))
+	}
+	emit(event.EventTypePostHookCompleted, state.Completed)
+
+	emitTerminal(event.EventTypeInvocationCompleted, state.Completed, nil)
+	return &praxis.InvocationResult{
+		Response:   &msg,
+		FinalState: state.Completed,
+	}
 }
 
 // handleToolCallsWithEvents dispatches tool calls with event emission.
@@ -280,9 +271,9 @@ func (o *Orchestrator) handleToolCallsWithEvents(
 
 // failLoop transitions to Failed and emits the terminal event.
 func (o *Orchestrator) failLoop(
+	ctx context.Context,
 	machine *state.Machine,
 	sink eventSink,
-	ctx context.Context,
 	err error,
 ) *praxis.InvocationResult {
 	if !machine.State().IsTerminal() {
