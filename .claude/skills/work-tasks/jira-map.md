@@ -83,7 +83,7 @@
 | T7.7 | PRAX-74 | PRAX-15 | LICENSE file | Done | main |
 | T8.1 | PRAX-75 | PRAX-16 | 85% line coverage | Done | main |
 | T8.2 | PRAX-76 | PRAX-16 | make check passes | Done | main |
-| T8.3 | PRAX-77 | PRAX-16 | CHANGELOG.md via release-please | To Do | — |
+| T8.3 | PRAX-77 | PRAX-16 | CHANGELOG.md via release-please | Done | v0.1.0 tag |
 
 ## Subtasks — v0.3.0
 | ID | Key | Story | Title |
