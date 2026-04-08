@@ -15,7 +15,7 @@ func TestNullResolver_ImplementsResolver(_ *testing.T) {
 }
 
 func TestNullResolver_Fetch(t *testing.T) {
-	tests := []struct {
+	tests := []struct { //nolint:gosec // G101: test data, not real credentials
 		name        string
 		credName    string
 		wantInError string

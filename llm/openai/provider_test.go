@@ -157,7 +157,7 @@ func TestProvider_Complete_ToolUse(t *testing.T) {
 func TestProvider_Complete_HTTP429_TransientError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(429)
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"error": map[string]any{"message": "rate limited", "type": "rate_limit_error"},
 		})
 	}))
@@ -182,7 +182,7 @@ func TestProvider_Complete_HTTP429_TransientError(t *testing.T) {
 func TestProvider_Complete_HTTP400_PermanentError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(400)
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"error": map[string]any{"message": "bad request", "type": "invalid_request_error"},
 		})
 	}))

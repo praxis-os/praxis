@@ -86,71 +86,11 @@ func (o *Orchestrator) runLoop(
 			firstCall = false
 		}
 
-		emit(event.EventTypeLLMCallStarted, machine.State())
-
-		// Check context cancellation before LLM call (D21 §2.3).
-		if result := o.checkCancel(ctx, machine, sink, emitTerminal); result != nil {
+		var result *praxis.InvocationResult
+		messages, iterations, result = o.runIteration(ctx, req, model, messages, iterations, machine, sink, emit, emitTerminal)
+		if result != nil {
 			return result
 		}
-
-		// Pre-LLM filter chain.
-		filtered, filterResult := o.applyPreLLMFilter(ctx, machine, sink, emitTerminal, messages)
-		if filterResult != nil {
-			return filterResult
-		}
-		messages = filtered
-
-		// Build and dispatch LLM request.
-		llmReq := llm.LLMRequest{
-			Messages:     messages,
-			Model:        model,
-			Tools:        req.Tools,
-			SystemPrompt: req.SystemPrompt,
-		}
-
-		resp, providerErr := o.provider.Complete(ctx, llmReq)
-		if providerErr != nil {
-			return o.handleProviderError(ctx, machine, sink, emitTerminal, providerErr)
-		}
-
-		emit(event.EventTypeLLMCallCompleted, machine.State())
-		iterations++
-
-		// Record token usage from LLM response.
-		_ = o.budgetGuard.RecordTokens(ctx, resp.Usage.InputTokens, resp.Usage.OutputTokens)
-
-		// Transition to ToolDecision.
-		if err := machine.Transition(state.ToolDecision); err != nil {
-			return o.failLoop(ctx, machine, sink, errors.NewSystemError("transition to ToolDecision failed", err))
-		}
-		emit(event.EventTypeToolDecisionStarted, state.ToolDecision)
-
-		// Budget check at ToolDecision boundary (D21: budget breach > cancel).
-		if result := o.checkBudget(ctx, machine, sink); result != nil {
-			return result
-		}
-
-		messages = append(messages, resp.Message)
-
-		if resp.StopReason == llm.StopReasonToolUse {
-			toolResultMsg, toolErr := o.handleToolCallsWithEvents(ctx, resp.Message, machine, sink)
-			if toolErr != nil {
-				_ = machine.Transition(state.Failed)
-				emitTerminal(event.EventTypeInvocationFailed, state.Failed, toolErr)
-				return &praxis.InvocationResult{FinalState: state.Failed}
-			}
-
-			messages = append(messages, toolResultMsg)
-
-			if err := machine.Transition(state.LLMContinuation); err != nil {
-				return o.failLoop(ctx, machine, sink, errors.NewSystemError("transition to LLMContinuation failed", err))
-			}
-			emit(event.EventTypeLLMContinuationStarted, state.LLMContinuation)
-			continue
-		}
-
-		// EndTurn, MaxTokens, StopSequence, or unknown → complete.
-		return o.completeLoop(ctx, machine, sink, emit, emitTerminal, req, model, resp.Message)
 	}
 
 	// Max turns exhausted.
@@ -158,6 +98,86 @@ func (o *Orchestrator) runLoop(
 	_ = machine.Transition(state.Failed)
 	emitTerminal(event.EventTypeInvocationFailed, state.Failed, sysErr)
 	return &praxis.InvocationResult{FinalState: state.Failed}
+}
+
+// runIteration executes a single LLM call iteration within the main loop.
+// Returns updated messages, iteration count, and a non-nil result if the loop should terminate.
+func (o *Orchestrator) runIteration(
+	ctx context.Context,
+	req praxis.InvocationRequest,
+	model string,
+	messages []llm.Message,
+	iterations int,
+	machine *state.Machine,
+	sink eventSink,
+	emit func(event.EventType, state.State),
+	emitTerminal func(event.EventType, state.State, error),
+) ([]llm.Message, int, *praxis.InvocationResult) {
+	emit(event.EventTypeLLMCallStarted, machine.State())
+
+	// Check context cancellation before LLM call (D21 §2.3).
+	if result := o.checkCancel(ctx, machine, sink, emitTerminal); result != nil {
+		return messages, iterations, result
+	}
+
+	// Pre-LLM filter chain.
+	filtered, filterResult := o.applyPreLLMFilter(ctx, machine, sink, emitTerminal, messages)
+	if filterResult != nil {
+		return messages, iterations, filterResult
+	}
+	messages = filtered
+
+	// Build and dispatch LLM request.
+	llmReq := llm.LLMRequest{
+		Messages:     messages,
+		Model:        model,
+		Tools:        req.Tools,
+		SystemPrompt: req.SystemPrompt,
+	}
+
+	resp, providerErr := o.provider.Complete(ctx, llmReq)
+	if providerErr != nil {
+		return messages, iterations, o.handleProviderError(ctx, machine, sink, emitTerminal, providerErr)
+	}
+
+	emit(event.EventTypeLLMCallCompleted, machine.State())
+	iterations++
+
+	// Record token usage from LLM response.
+	_ = o.budgetGuard.RecordTokens(ctx, resp.Usage.InputTokens, resp.Usage.OutputTokens)
+
+	// Transition to ToolDecision.
+	if err := machine.Transition(state.ToolDecision); err != nil {
+		return messages, iterations, o.failLoop(ctx, machine, sink, errors.NewSystemError("transition to ToolDecision failed", err))
+	}
+	emit(event.EventTypeToolDecisionStarted, state.ToolDecision)
+
+	// Budget check at ToolDecision boundary (D21: budget breach > cancel).
+	if result := o.checkBudget(ctx, machine, sink); result != nil {
+		return messages, iterations, result
+	}
+
+	messages = append(messages, resp.Message)
+
+	if resp.StopReason == llm.StopReasonToolUse {
+		toolResultMsg, toolErr := o.handleToolCallsWithEvents(ctx, resp.Message, machine, sink)
+		if toolErr != nil {
+			_ = machine.Transition(state.Failed)
+			emitTerminal(event.EventTypeInvocationFailed, state.Failed, toolErr)
+			return messages, iterations, &praxis.InvocationResult{FinalState: state.Failed}
+		}
+
+		messages = append(messages, toolResultMsg)
+
+		if err := machine.Transition(state.LLMContinuation); err != nil {
+			return messages, iterations, o.failLoop(ctx, machine, sink, errors.NewSystemError("transition to LLMContinuation failed", err))
+		}
+		emit(event.EventTypeLLMContinuationStarted, state.LLMContinuation)
+		return messages, iterations, nil
+	}
+
+	// EndTurn, MaxTokens, StopSequence, or unknown → complete.
+	return messages, iterations, o.completeLoop(ctx, machine, sink, emit, emitTerminal, req, model, resp.Message)
 }
 
 // checkCancel inspects the context for cancellation and returns a terminal
