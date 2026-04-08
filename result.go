@@ -4,6 +4,7 @@ package praxis
 
 import (
 	"github.com/praxis-os/praxis/budget"
+	"github.com/praxis-os/praxis/event"
 	"github.com/praxis-os/praxis/llm"
 	"github.com/praxis-os/praxis/state"
 )
@@ -30,5 +31,5 @@ type InvocationResult struct {
 	// Events is the ordered list of lifecycle events emitted during the
 	// invocation. Populated on the sync path (Invoke); nil on the stream
 	// path (InvokeStream).
-	Events []InvocationEvent
+	Events []event.InvocationEvent
 }

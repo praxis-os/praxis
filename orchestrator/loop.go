@@ -9,6 +9,7 @@ import (
 
 	"github.com/praxis-os/praxis"
 	"github.com/praxis-os/praxis/errors"
+	"github.com/praxis-os/praxis/event"
 	"github.com/praxis-os/praxis/llm"
 	"github.com/praxis-os/praxis/state"
 	"github.com/praxis-os/praxis/tools"
@@ -17,7 +18,7 @@ import (
 // eventSink abstracts where lifecycle events are delivered.
 // On the sync path, events are collected into a slice.
 // On the stream path, events are sent to a channel.
-type eventSink func(ctx context.Context, event praxis.InvocationEvent)
+type eventSink func(ctx context.Context, e event.InvocationEvent)
 
 // runLoop is the shared state-machine driver for both Invoke and InvokeStream.
 //
@@ -33,16 +34,16 @@ func (o *Orchestrator) runLoop(
 	machine := state.NewMachine()
 	now := time.Now
 
-	emit := func(t praxis.EventType, s state.State) {
-		sink(ctx, praxis.InvocationEvent{
+	emit := func(t event.EventType, s state.State) {
+		sink(ctx, event.InvocationEvent{
 			Type:  t,
 			State: s,
 			At:    now(),
 		})
 	}
 
-	emitTerminal := func(t praxis.EventType, s state.State, err error) {
-		sink(ctx, praxis.InvocationEvent{
+	emitTerminal := func(t event.EventType, s state.State, err error) {
+		sink(ctx, event.InvocationEvent{
 			Type:  t,
 			State: s,
 			At:    now(),
@@ -54,14 +55,14 @@ func (o *Orchestrator) runLoop(
 	if err := machine.Transition(state.Initializing); err != nil {
 		return o.failLoop(machine, sink, ctx, errors.NewSystemError("transition to Initializing failed", err))
 	}
-	emit(praxis.EventTypeInvocationStarted, state.Initializing)
+	emit(event.EventTypeInvocationStarted, state.Initializing)
 
 	// Step 2: Initializing → PreHook
 	if err := machine.Transition(state.PreHook); err != nil {
 		return o.failLoop(machine, sink, ctx, errors.NewSystemError("transition to PreHook failed", err))
 	}
-	emit(praxis.EventTypeInitialized, state.PreHook)
-	emit(praxis.EventTypePreHookStarted, state.PreHook)
+	emit(event.EventTypeInitialized, state.PreHook)
+	emit(event.EventTypePreHookStarted, state.PreHook)
 
 	// Conversation history.
 	messages := make([]llm.Message, len(req.Messages))
@@ -75,17 +76,17 @@ func (o *Orchestrator) runLoop(
 			if err := machine.Transition(state.LLMCall); err != nil {
 				return o.failLoop(machine, sink, ctx, errors.NewSystemError("transition to LLMCall failed", err))
 			}
-			emit(praxis.EventTypePreHookCompleted, state.LLMCall)
+			emit(event.EventTypePreHookCompleted, state.LLMCall)
 			firstCall = false
 		}
 
-		emit(praxis.EventTypeLLMCallStarted, machine.State())
+		emit(event.EventTypeLLMCallStarted, machine.State())
 
 		// Check context cancellation before LLM call.
 		if ctx.Err() != nil {
 			typed := o.classifier.Classify(ctx.Err())
 			_ = machine.Transition(state.Cancelled)
-			emitTerminal(praxis.EventTypeInvocationCancelled, state.Cancelled, typed)
+			emitTerminal(event.EventTypeInvocationCancelled, state.Cancelled, typed)
 			return &praxis.InvocationResult{FinalState: state.Cancelled}
 		}
 
@@ -102,23 +103,23 @@ func (o *Orchestrator) runLoop(
 			if ctx.Err() != nil {
 				typed := o.classifier.Classify(ctx.Err())
 				_ = machine.Transition(state.Cancelled)
-				emitTerminal(praxis.EventTypeInvocationCancelled, state.Cancelled, typed)
+				emitTerminal(event.EventTypeInvocationCancelled, state.Cancelled, typed)
 				return &praxis.InvocationResult{FinalState: state.Cancelled}
 			}
 			typed := o.classifier.Classify(providerErr)
 			_ = machine.Transition(state.Failed)
-			emitTerminal(praxis.EventTypeInvocationFailed, state.Failed, typed)
+			emitTerminal(event.EventTypeInvocationFailed, state.Failed, typed)
 			return &praxis.InvocationResult{FinalState: state.Failed}
 		}
 
-		emit(praxis.EventTypeLLMCallCompleted, machine.State())
+		emit(event.EventTypeLLMCallCompleted, machine.State())
 		iterations++
 
 		// Transition to ToolDecision.
 		if err := machine.Transition(state.ToolDecision); err != nil {
 			return o.failLoop(machine, sink, ctx, errors.NewSystemError("transition to ToolDecision failed", err))
 		}
-		emit(praxis.EventTypeToolDecisionStarted, state.ToolDecision)
+		emit(event.EventTypeToolDecisionStarted, state.ToolDecision)
 
 		messages = append(messages, resp.Message)
 
@@ -128,15 +129,15 @@ func (o *Orchestrator) runLoop(
 			if err := machine.Transition(state.PostHook); err != nil {
 				return o.failLoop(machine, sink, ctx, errors.NewSystemError("transition to PostHook failed", err))
 			}
-			emit(praxis.EventTypePostHookStarted, state.PostHook)
+			emit(event.EventTypePostHookStarted, state.PostHook)
 
 			if err := machine.Transition(state.Completed); err != nil {
 				return o.failLoop(machine, sink, ctx, errors.NewSystemError("transition to Completed failed", err))
 			}
-			emit(praxis.EventTypePostHookCompleted, state.Completed)
+			emit(event.EventTypePostHookCompleted, state.Completed)
 
 			msg := resp.Message
-			emitTerminal(praxis.EventTypeInvocationCompleted, state.Completed, nil)
+			emitTerminal(event.EventTypeInvocationCompleted, state.Completed, nil)
 			return &praxis.InvocationResult{
 				Response:   &msg,
 				FinalState: state.Completed,
@@ -147,7 +148,7 @@ func (o *Orchestrator) runLoop(
 			toolResultMsg, toolErr := o.handleToolCallsWithEvents(ctx, resp.Message, machine, sink)
 			if toolErr != nil {
 				_ = machine.Transition(state.Failed)
-				emitTerminal(praxis.EventTypeInvocationFailed, state.Failed, toolErr)
+				emitTerminal(event.EventTypeInvocationFailed, state.Failed, toolErr)
 				return &praxis.InvocationResult{FinalState: state.Failed}
 			}
 
@@ -157,22 +158,22 @@ func (o *Orchestrator) runLoop(
 			if err := machine.Transition(state.LLMContinuation); err != nil {
 				return o.failLoop(machine, sink, ctx, errors.NewSystemError("transition to LLMContinuation failed", err))
 			}
-			emit(praxis.EventTypeLLMContinuationStarted, state.LLMContinuation)
+			emit(event.EventTypeLLMContinuationStarted, state.LLMContinuation)
 
 		default:
 			// Unknown stop reason — complete.
 			if err := machine.Transition(state.PostHook); err != nil {
 				return o.failLoop(machine, sink, ctx, errors.NewSystemError("transition to PostHook failed", err))
 			}
-			emit(praxis.EventTypePostHookStarted, state.PostHook)
+			emit(event.EventTypePostHookStarted, state.PostHook)
 
 			if err := machine.Transition(state.Completed); err != nil {
 				return o.failLoop(machine, sink, ctx, errors.NewSystemError("transition to Completed failed", err))
 			}
-			emit(praxis.EventTypePostHookCompleted, state.Completed)
+			emit(event.EventTypePostHookCompleted, state.Completed)
 
 			msg := resp.Message
-			emitTerminal(praxis.EventTypeInvocationCompleted, state.Completed, nil)
+			emitTerminal(event.EventTypeInvocationCompleted, state.Completed, nil)
 			return &praxis.InvocationResult{
 				Response:   &msg,
 				FinalState: state.Completed,
@@ -186,7 +187,7 @@ func (o *Orchestrator) runLoop(
 		nil,
 	)
 	_ = machine.Transition(state.Failed)
-	emitTerminal(praxis.EventTypeInvocationFailed, state.Failed, sysErr)
+	emitTerminal(event.EventTypeInvocationFailed, state.Failed, sysErr)
 	return &praxis.InvocationResult{FinalState: state.Failed}
 }
 
@@ -226,8 +227,8 @@ func (o *Orchestrator) handleToolCallsWithEvents(
 	}
 
 	for _, call := range toolCalls {
-		sink(ctx, praxis.InvocationEvent{
-			Type:       praxis.EventTypeToolCallStarted,
+		sink(ctx, event.InvocationEvent{
+			Type:       event.EventTypeToolCallStarted,
 			State:      state.ToolCall,
 			At:         time.Now(),
 			ToolCallID: call.CallID,
@@ -241,8 +242,8 @@ func (o *Orchestrator) handleToolCallsWithEvents(
 			)
 		}
 
-		sink(ctx, praxis.InvocationEvent{
-			Type:       praxis.EventTypeToolCallCompleted,
+		sink(ctx, event.InvocationEvent{
+			Type:       event.EventTypeToolCallCompleted,
 			State:      state.ToolCall,
 			At:         time.Now(),
 			ToolCallID: call.CallID,
@@ -260,13 +261,13 @@ func (o *Orchestrator) handleToolCallsWithEvents(
 	if err := machine.Transition(state.PostToolFilter); err != nil {
 		return llm.Message{}, errors.NewSystemError("transition to PostToolFilter failed", err)
 	}
-	sink(ctx, praxis.InvocationEvent{
-		Type:  praxis.EventTypePostToolFilterStarted,
+	sink(ctx, event.InvocationEvent{
+		Type:  event.EventTypePostToolFilterStarted,
 		State: state.PostToolFilter,
 		At:    time.Now(),
 	})
-	sink(ctx, praxis.InvocationEvent{
-		Type:  praxis.EventTypePostToolFilterCompleted,
+	sink(ctx, event.InvocationEvent{
+		Type:  event.EventTypePostToolFilterCompleted,
 		State: state.PostToolFilter,
 		At:    time.Now(),
 	})
@@ -287,8 +288,8 @@ func (o *Orchestrator) failLoop(
 	if !machine.State().IsTerminal() {
 		_ = machine.Transition(state.Failed)
 	}
-	sink(ctx, praxis.InvocationEvent{
-		Type:  praxis.EventTypeInvocationFailed,
+	sink(ctx, event.InvocationEvent{
+		Type:  event.EventTypeInvocationFailed,
 		State: machine.State(),
 		At:    time.Now(),
 		Err:   err,

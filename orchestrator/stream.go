@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/praxis-os/praxis"
+	"github.com/praxis-os/praxis/event"
 	"github.com/praxis-os/praxis/internal/ctxutil"
 )
 
@@ -25,8 +26,8 @@ import (
 //
 // InvokeStream respects ctx cancellation. A cancelled context causes the
 // invocation to terminate with EventTypeInvocationCancelled.
-func (o *Orchestrator) InvokeStream(ctx context.Context, req praxis.InvocationRequest) <-chan praxis.InvocationEvent {
-	ch := make(chan praxis.InvocationEvent, 16)
+func (o *Orchestrator) InvokeStream(ctx context.Context, req praxis.InvocationRequest) <-chan event.InvocationEvent {
+	ch := make(chan event.InvocationEvent, 16)
 
 	model := req.Model
 	if model == "" {
@@ -44,15 +45,15 @@ func (o *Orchestrator) InvokeStream(ctx context.Context, req praxis.InvocationRe
 
 		// Handle missing model before entering the loop.
 		if model == "" {
-			ch <- praxis.InvocationEvent{
-				Type: praxis.EventTypeInvocationFailed,
+			ch <- event.InvocationEvent{
+				Type: event.EventTypeInvocationFailed,
 				At:   time.Now(),
 				Err:  fmt.Errorf("orchestrator: no model configured: set WithDefaultModel or InvocationRequest.Model"),
 			}
 			return
 		}
 
-		sink := func(sinkCtx context.Context, e praxis.InvocationEvent) {
+		sink := func(sinkCtx context.Context, e event.InvocationEvent) {
 			if e.Type.IsTerminal() {
 				// Terminal events use a detached Layer 4 context (D22/D23)
 				// to ensure delivery even if the parent is cancelled.

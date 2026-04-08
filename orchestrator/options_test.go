@@ -8,6 +8,7 @@ import (
 
 	"github.com/praxis-os/praxis"
 	"github.com/praxis-os/praxis/budget"
+	"github.com/praxis-os/praxis/event"
 	"github.com/praxis-os/praxis/credentials"
 	"github.com/praxis-os/praxis/errors"
 	"github.com/praxis-os/praxis/hooks"
@@ -60,7 +61,7 @@ func (stubPriceProvider) PriceForToken(_ context.Context, _, _ string, _ budget.
 
 type stubLifecycleEmitter struct{}
 
-func (stubLifecycleEmitter) Emit(_ context.Context, _ praxis.InvocationEvent) error { return nil }
+func (stubLifecycleEmitter) Emit(_ context.Context, _ event.InvocationEvent) error { return nil }
 
 type stubAttributeEnricher struct{}
 

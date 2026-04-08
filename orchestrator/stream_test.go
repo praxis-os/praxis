@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/praxis-os/praxis"
+	"github.com/praxis-os/praxis/event"
 	"github.com/praxis-os/praxis/llm"
 	"github.com/praxis-os/praxis/llm/mock"
 	"github.com/praxis-os/praxis/orchestrator"
@@ -15,8 +16,8 @@ import (
 )
 
 // drainEvents collects all events from the channel with a timeout.
-func drainEvents(ch <-chan praxis.InvocationEvent, timeout time.Duration) []praxis.InvocationEvent {
-	var events []praxis.InvocationEvent
+func drainEvents(ch <-chan event.InvocationEvent, timeout time.Duration) []event.InvocationEvent {
+	var events []event.InvocationEvent
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
 	for {
@@ -46,8 +47,8 @@ func TestInvokeStream_SimpleCompletion(t *testing.T) {
 	}
 
 	// First event must be InvocationStarted.
-	if events[0].Type != praxis.EventTypeInvocationStarted {
-		t.Errorf("first event: want %q, got %q", praxis.EventTypeInvocationStarted, events[0].Type)
+	if events[0].Type != event.EventTypeInvocationStarted {
+		t.Errorf("first event: want %q, got %q", event.EventTypeInvocationStarted, events[0].Type)
 	}
 
 	// Last event must be terminal.
@@ -55,22 +56,22 @@ func TestInvokeStream_SimpleCompletion(t *testing.T) {
 	if !last.Type.IsTerminal() {
 		t.Errorf("last event %q should be terminal", last.Type)
 	}
-	if last.Type != praxis.EventTypeInvocationCompleted {
-		t.Errorf("last event: want %q, got %q", praxis.EventTypeInvocationCompleted, last.Type)
+	if last.Type != event.EventTypeInvocationCompleted {
+		t.Errorf("last event: want %q, got %q", event.EventTypeInvocationCompleted, last.Type)
 	}
 
 	// Verify expected event sequence for simple completion.
-	expectedTypes := []praxis.EventType{
-		praxis.EventTypeInvocationStarted,
-		praxis.EventTypeInitialized,
-		praxis.EventTypePreHookStarted,
-		praxis.EventTypePreHookCompleted,
-		praxis.EventTypeLLMCallStarted,
-		praxis.EventTypeLLMCallCompleted,
-		praxis.EventTypeToolDecisionStarted,
-		praxis.EventTypePostHookStarted,
-		praxis.EventTypePostHookCompleted,
-		praxis.EventTypeInvocationCompleted,
+	expectedTypes := []event.EventType{
+		event.EventTypeInvocationStarted,
+		event.EventTypeInitialized,
+		event.EventTypePreHookStarted,
+		event.EventTypePreHookCompleted,
+		event.EventTypeLLMCallStarted,
+		event.EventTypeLLMCallCompleted,
+		event.EventTypeToolDecisionStarted,
+		event.EventTypePostHookStarted,
+		event.EventTypePostHookCompleted,
+		event.EventTypeInvocationCompleted,
 	}
 
 	if len(events) != len(expectedTypes) {
@@ -114,7 +115,7 @@ func TestInvokeStream_ToolUseThenComplete(t *testing.T) {
 	hasLLMContinuation := false
 	for _, e := range events {
 		switch e.Type {
-		case praxis.EventTypeToolCallStarted:
+		case event.EventTypeToolCallStarted:
 			hasToolCallStarted = true
 			if e.ToolCallID != "c1" {
 				t.Errorf("ToolCallStarted: ToolCallID want c1, got %q", e.ToolCallID)
@@ -122,11 +123,11 @@ func TestInvokeStream_ToolUseThenComplete(t *testing.T) {
 			if e.ToolName != "search" {
 				t.Errorf("ToolCallStarted: ToolName want search, got %q", e.ToolName)
 			}
-		case praxis.EventTypeToolCallCompleted:
+		case event.EventTypeToolCallCompleted:
 			hasToolCallCompleted = true
-		case praxis.EventTypePostToolFilterStarted:
+		case event.EventTypePostToolFilterStarted:
 			hasPostToolFilterStarted = true
-		case praxis.EventTypeLLMContinuationStarted:
+		case event.EventTypeLLMContinuationStarted:
 			hasLLMContinuation = true
 		}
 	}
@@ -146,8 +147,8 @@ func TestInvokeStream_ToolUseThenComplete(t *testing.T) {
 
 	// Last event must be terminal.
 	last := events[len(events)-1]
-	if last.Type != praxis.EventTypeInvocationCompleted {
-		t.Errorf("last event: want %q, got %q", praxis.EventTypeInvocationCompleted, last.Type)
+	if last.Type != event.EventTypeInvocationCompleted {
+		t.Errorf("last event: want %q, got %q", event.EventTypeInvocationCompleted, last.Type)
 	}
 }
 
@@ -170,8 +171,8 @@ func TestInvokeStream_ContextCancel(t *testing.T) {
 	}
 
 	last := events[len(events)-1]
-	if last.Type != praxis.EventTypeInvocationCancelled {
-		t.Errorf("last event: want %q, got %q", praxis.EventTypeInvocationCancelled, last.Type)
+	if last.Type != event.EventTypeInvocationCancelled {
+		t.Errorf("last event: want %q, got %q", event.EventTypeInvocationCancelled, last.Type)
 	}
 }
 
@@ -210,8 +211,8 @@ func TestInvokeStream_NoModelError(t *testing.T) {
 	if len(events) != 1 {
 		t.Fatalf("expected 1 event, got %d", len(events))
 	}
-	if events[0].Type != praxis.EventTypeInvocationFailed {
-		t.Errorf("event type: want %q, got %q", praxis.EventTypeInvocationFailed, events[0].Type)
+	if events[0].Type != event.EventTypeInvocationFailed {
+		t.Errorf("event type: want %q, got %q", event.EventTypeInvocationFailed, events[0].Type)
 	}
 	if events[0].Err == nil {
 		t.Error("expected non-nil error for no model configured")
@@ -234,8 +235,8 @@ func TestInvoke_EventsCollected(t *testing.T) {
 	}
 
 	// First event must be InvocationStarted.
-	if result.Events[0].Type != praxis.EventTypeInvocationStarted {
-		t.Errorf("first event: want %q, got %q", praxis.EventTypeInvocationStarted, result.Events[0].Type)
+	if result.Events[0].Type != event.EventTypeInvocationStarted {
+		t.Errorf("first event: want %q, got %q", event.EventTypeInvocationStarted, result.Events[0].Type)
 	}
 
 	// Last event must be terminal.
@@ -267,7 +268,7 @@ func TestInvokeStream_ExactlyOneTerminalEvent(t *testing.T) {
 }
 
 // eventTypes extracts the event type strings for debugging.
-func eventTypes(events []praxis.InvocationEvent) []string {
+func eventTypes(events []event.InvocationEvent) []string {
 	types := make([]string, len(events))
 	for i, e := range events {
 		types[i] = string(e.Type)

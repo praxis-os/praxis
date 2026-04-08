@@ -5,7 +5,7 @@ package telemetry
 import (
 	"context"
 
-	"github.com/praxis-os/praxis"
+	"github.com/praxis-os/praxis/event"
 )
 
 // LifecycleEventEmitter receives invocation lifecycle events from the
@@ -22,7 +22,7 @@ import (
 type LifecycleEventEmitter interface {
 	// Emit delivers a lifecycle event to the sink. A non-nil error signals
 	// a delivery failure; the orchestrator logs it but does not halt.
-	Emit(ctx context.Context, event praxis.InvocationEvent) error
+	Emit(ctx context.Context, e event.InvocationEvent) error
 }
 
 // AttributeEnricher adds caller-specific attributes to telemetry metadata.
@@ -49,7 +49,9 @@ var _ AttributeEnricher = NullEnricher{}
 type NullEmitter struct{}
 
 // Emit discards the event without side effects and returns nil.
-func (NullEmitter) Emit(_ context.Context, _ praxis.InvocationEvent) error { return nil }
+func (NullEmitter) Emit(_ context.Context, _ event.InvocationEvent) error { return nil }
+
+
 
 // NullEnricher is an [AttributeEnricher] that returns an empty map.
 // Used as the default when no enrichment is configured.

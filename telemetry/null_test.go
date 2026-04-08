@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/praxis-os/praxis"
+	"github.com/praxis-os/praxis/event"
 	"github.com/praxis-os/praxis/telemetry"
 )
 
@@ -19,7 +19,7 @@ func TestInterfaces(_ *testing.T) {
 func TestNullEmitter_Emit(t *testing.T) {
 	emitter := telemetry.NullEmitter{}
 
-	events := []praxis.InvocationEvent{
+	events := []event.InvocationEvent{
 		{},
 		{
 			InvocationID: "inv-1",

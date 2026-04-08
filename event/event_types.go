@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-package praxis
+package event
 
 // Event type constants define the 21 lifecycle events emitted by the
 // orchestrator during an invocation (D18, D31, D52b).

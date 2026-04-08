@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
-package praxis
+// Package event defines the lifecycle event types emitted by the praxis
+// orchestrator during an invocation.
+//
+// Consumers of [orchestrator.InvokeStream] import this package to switch
+// on [EventType] constants and read [InvocationEvent] fields.
+package event
 
 import (
 	"time"

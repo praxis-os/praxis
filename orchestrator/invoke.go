@@ -6,6 +6,7 @@ import (
 	"context"
 
 	"github.com/praxis-os/praxis"
+	"github.com/praxis-os/praxis/event"
 )
 
 // runInvocation is the sync invocation entry point.
@@ -18,10 +19,10 @@ func runInvocation(
 	maxTurns int,
 	req praxis.InvocationRequest,
 ) (*praxis.InvocationResult, error) {
-	var events []praxis.InvocationEvent
+	var events []event.InvocationEvent
 	var terminalErr error
 
-	sink := func(_ context.Context, e praxis.InvocationEvent) {
+	sink := func(_ context.Context, e event.InvocationEvent) {
 		events = append(events, e)
 		if e.Type.IsTerminal() && e.Err != nil {
 			terminalErr = e.Err
