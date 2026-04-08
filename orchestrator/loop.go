@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/praxis-os/praxis"
+	"github.com/praxis-os/praxis/budget"
 	"github.com/praxis-os/praxis/errors"
 	"github.com/praxis-os/praxis/event"
 	"github.com/praxis-os/praxis/hooks"
@@ -39,6 +40,11 @@ func (o *Orchestrator) runLoop(
 	}
 	emitTerminal := func(t event.EventType, s state.State, err error) {
 		sink(ctx, event.InvocationEvent{Type: t, State: s, At: now(), Err: err})
+	}
+
+	// Start budget wall clock for concrete BudgetGuard.
+	if bg, ok := o.budgetGuard.(*budget.BudgetGuard); ok {
+		bg.Start(time.Now())
 	}
 
 	// Step 1: Created → Initializing
@@ -110,11 +116,24 @@ func (o *Orchestrator) runLoop(
 		emit(event.EventTypeLLMCallCompleted, machine.State())
 		iterations++
 
+		// Record token usage from LLM response.
+		_ = o.budgetGuard.RecordTokens(ctx, resp.Usage.InputTokens, resp.Usage.OutputTokens)
+
 		// Transition to ToolDecision.
 		if err := machine.Transition(state.ToolDecision); err != nil {
 			return o.failLoop(ctx, machine, sink, errors.NewSystemError("transition to ToolDecision failed", err))
 		}
 		emit(event.EventTypeToolDecisionStarted, state.ToolDecision)
+
+		// Budget check at ToolDecision boundary (D21: budget breach > cancel).
+		if snap, budgetErr := o.budgetGuard.Check(ctx); budgetErr != nil {
+			_ = machine.Transition(state.BudgetExceeded)
+			sink(ctx, event.InvocationEvent{
+				Type: event.EventTypeBudgetExceeded, State: state.BudgetExceeded,
+				At: time.Now(), Err: budgetErr, BudgetSnapshot: snap,
+			})
+			return &praxis.InvocationResult{FinalState: state.BudgetExceeded, BudgetSnapshot: snap}
+		}
 
 		messages = append(messages, resp.Message)
 
@@ -408,6 +427,8 @@ func (o *Orchestrator) handleToolCallsWithEvents(
 			Type: event.EventTypeToolCallStarted, State: state.ToolCall,
 			At: time.Now(), ToolCallID: call.CallID, ToolName: call.Name,
 		})
+
+		_ = o.budgetGuard.RecordToolCall(ctx)
 
 		result, err := o.toolInvoker.Invoke(ctx, ictx, call)
 		if err != nil {
