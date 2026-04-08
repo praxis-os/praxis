@@ -46,7 +46,7 @@
 | T1.1 | PRAX-37 | PRAX-9 | Create go.mod with confirmed module path | Done | merged |
 | T1.2 | PRAX-38 | PRAX-9 | Create Makefile with standard targets | Done | merged |
 | T1.3 | PRAX-39 | PRAX-9 | Configure CI pipeline | Done | main |
-| T1.4 | PRAX-40 | PRAX-9 | Configure branch protection on main | To Do | — |
+| T1.4 | PRAX-40 | PRAX-9 | Configure branch protection on main | Done | gh api |
 | T1.5 | PRAX-41 | PRAX-9 | Configure release-please | Done | main |
 | T2.1 | PRAX-42 | PRAX-10 | Define State type with 14 constants | Done | [#2](https://github.com/praxis-os/praxis/pull/2) merged |
 | T2.2 | PRAX-43 | PRAX-10 | Transition allow-list table | Done | included in T2.1 |
