@@ -15,7 +15,23 @@ jobs:
       contents: write
       pull-requests: write
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Derive pre-v1 release override
+        id: derive-release-as
+        run: .github/scripts/derive-release-as.sh
+
       - uses: googleapis/release-please-action@v4
+        if: steps.derive-release-as.outputs.has_release_as != 'true'
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+      - uses: googleapis/release-please-action@v4
+        if: steps.derive-release-as.outputs.has_release_as == 'true'
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+          release-as: ${{ steps.derive-release-as.outputs.release_as }}

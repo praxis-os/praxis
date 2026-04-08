@@ -107,19 +107,26 @@ pushes to `main`. Configuration:
 
 ```json
 {
-  "release-type": "go",
-  "bump-minor-pre-major": true,
-  "bump-patch-for-minor-pre-major": true,
-  "changelog-sections": [
-    {"type": "feat", "section": "Added"},
-    {"type": "fix", "section": "Fixed"},
-    {"type": "docs", "section": "Documentation"},
-    {"type": "perf", "section": "Performance"},
-    {"type": "refactor", "section": "Changed"},
-    {"type": "test", "section": "Testing"},
-    {"type": "chore", "section": "Maintenance", "hidden": true}
-  ],
-  "extra-files": ["internal/version/version.go"]
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "packages": {
+    ".": {
+      "release-type": "go",
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": false,
+      "changelog-sections": [
+        {"type": "feat", "section": "Added"},
+        {"type": "fix", "section": "Fixed"},
+        {"type": "docs", "section": "Documentation"},
+        {"type": "perf", "section": "Performance"},
+        {"type": "refactor", "section": "Changed"},
+        {"type": "test", "section": "Testing"},
+        {"type": "chore", "section": "Maintenance", "hidden": true},
+        {"type": "ci", "section": "CI", "hidden": true},
+        {"type": "build", "section": "Build", "hidden": true}
+      ],
+      "extra-files": ["internal/version/version.go"]
+    }
+  }
 }
 ```
 
@@ -129,9 +136,14 @@ constant updated by release-please on each release PR. This allows
 
 **Rationale.** The `go` release type is the correct strategy for Go modules:
 the canonical version is the git tag, not a file. `bump-minor-pre-major`
-ensures that `feat:` commits during v0.x bump `v0.MINOR.0` (not `v1.0.0`).
-The changelog sections are remapped to the keep-a-changelog convention
-(Added/Fixed/Changed) from release-please's default section names.
+ensures that pre-v1 breaking changes stay on the minor line rather than
+jumping to `v1.0.0`, while `bump-patch-for-minor-pre-major: false` preserves
+the standard `feat -> minor`, `fix/perf -> patch` behavior. praxis layers one
+additional workflow rule on top: when the manifest version is still `< 1.0.0`,
+any unreleased feature or breaking change is released as the next odd minor
+milestone (`v0.1.x -> v0.3.0`, `v0.3.x -> v0.5.0`). The changelog sections are
+remapped to the keep-a-changelog convention (Added/Fixed/Changed) from
+release-please's default section names.
 
 **Alternatives considered.** (a) `simple` release type — rejected; does not
 understand Go versioning conventions. (b) GoReleaser — rejected; designed for

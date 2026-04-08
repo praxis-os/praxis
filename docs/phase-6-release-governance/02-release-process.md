@@ -98,21 +98,25 @@ When the maintainer merges the release PR, the release workflow:
 ```json
 {
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
-  "release-type": "go",
-  "bump-minor-pre-major": true,
-  "bump-patch-for-minor-pre-major": true,
-  "changelog-sections": [
-    {"type": "feat", "section": "Added"},
-    {"type": "fix", "section": "Fixed"},
-    {"type": "docs", "section": "Documentation"},
-    {"type": "perf", "section": "Performance"},
-    {"type": "refactor", "section": "Changed"},
-    {"type": "test", "section": "Testing"},
-    {"type": "chore", "section": "Maintenance", "hidden": true},
-    {"type": "ci", "section": "CI", "hidden": true},
-    {"type": "build", "section": "Build", "hidden": true}
-  ],
-  "extra-files": ["internal/version/version.go"]
+  "packages": {
+    ".": {
+      "release-type": "go",
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": false,
+      "changelog-sections": [
+        {"type": "feat", "section": "Added"},
+        {"type": "fix", "section": "Fixed"},
+        {"type": "docs", "section": "Documentation"},
+        {"type": "perf", "section": "Performance"},
+        {"type": "refactor", "section": "Changed"},
+        {"type": "test", "section": "Testing"},
+        {"type": "chore", "section": "Maintenance", "hidden": true},
+        {"type": "ci", "section": "CI", "hidden": true},
+        {"type": "build", "section": "Build", "hidden": true}
+      ],
+      "extra-files": ["internal/version/version.go"]
+    }
+  }
 }
 ```
 
@@ -133,9 +137,17 @@ When the maintainer merges the release PR, the release workflow:
 | `BREAKING CHANGE:` → bump minor (0.X.0) | `BREAKING CHANGE:` → bump major (X.0.0) |
 
 The `bump-minor-pre-major` and `bump-patch-for-minor-pre-major` flags ensure
-that during v0.x, `feat:` bumps the minor version and `BREAKING CHANGE:` also
-bumps the minor (not the major). This prevents an accidental v1.0.0 from a
-feature commit.
+that release-please keeps standard pre-v1 semver semantics: `feat:` bumps the
+minor version, `fix:`/`perf:` bump the patch version, and `BREAKING CHANGE:`
+bumps the minor rather than the major. `bump-patch-for-minor-pre-major: false`
+is important here: setting it to `true` would downgrade pre-v1 `feat:` commits
+to patch releases.
+
+praxis adds one workflow-level override on top of release-please: for releases
+below `v1.0.0`, any unreleased `feat`, `feature`, conventional-commit `!`, or
+`BREAKING CHANGE:` causes the release PR to target the next odd minor
+(`v0.1.x -> v0.3.0`, `v0.3.x -> v0.5.0`). Pure `fix:`/`perf:` releases remain
+patch releases (`v0.1.1`, `v0.1.2`, ...).
 
 ### 2.4 The `version.go` File
 
@@ -165,7 +177,7 @@ release-please generates `CHANGELOG.md` in keep-a-changelog format:
 ```markdown
 # Changelog
 
-## [0.3.0](https://github.com/praxis-go/praxis/compare/v0.2.0...v0.3.0) (2026-07-15)
+## [0.3.0](https://github.com/praxis-go/praxis/compare/v0.1.0...v0.3.0) (2026-07-15)
 
 ### Added
 
