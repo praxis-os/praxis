@@ -362,13 +362,15 @@ jobs:
   release-please:
     runs-on: ubuntu-latest
     permissions:
+      actions: write
       contents: write
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
       - run: .github/scripts/derive-release-as.sh
       - run: npx -y release-please@17.1.3 github-release ...
-      - run: npx -y release-please@17.1.3 release-pr ...
+      - run: npx -y release-please@17.1.3 release-pr --signoff="github-actions[bot] <...>"
+      - run: gh workflow run CI --ref release-please--branches--main
 ```
 
 When the release PR is merged, release-please creates the tag and GitHub

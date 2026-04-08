@@ -155,6 +155,12 @@ generated files even when release-please decides the rendered release notes are
 unchanged. This matters for praxis because the odd-minor override is computed
 in the workflow at runtime rather than stored permanently in the manifest.
 
+The release workflow also passes `--signoff` when generating the release PR
+commit so the DCO check stays green, then dispatches the `CI` workflow against
+the `release-please--branches--main` branch. That explicit dispatch is needed
+because pushes made with the workflow token do not automatically trigger the
+normal `pull_request` workflow for the generated release branch.
+
 ### 2.4 The `version.go` File
 
 ```go

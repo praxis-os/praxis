@@ -12,10 +12,12 @@ jobs:
     name: release-please
     runs-on: ubuntu-latest
     permissions:
+      actions: write
       contents: write
       pull-requests: write
     env:
       RELEASE_PLEASE_VERSION: 17.1.3
+      RELEASE_PLEASE_SIGNOFF: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>
       TARGET_BRANCH: main
     steps:
       - uses: actions/checkout@v4
@@ -47,7 +49,8 @@ jobs:
             --repo-url="${{ github.repository }}" \
             --target-branch="${TARGET_BRANCH}" \
             --config-file=release-please-config.json \
-            --manifest-file=.release-please-manifest.json
+            --manifest-file=.release-please-manifest.json \
+            --signoff="${RELEASE_PLEASE_SIGNOFF}"
 
       - name: Create or update release PR with override
         if: steps.derive-release-as.outputs.has_release_as == 'true'
@@ -60,4 +63,16 @@ jobs:
             --target-branch="${TARGET_BRANCH}" \
             --config-file=release-please-config.json \
             --manifest-file=.release-please-manifest.json \
+            --signoff="${RELEASE_PLEASE_SIGNOFF}" \
             --release-as="${{ steps.derive-release-as.outputs.release_as }}"
+
+      - name: Trigger CI for release PR branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RELEASE_BRANCH="release-please--branches--${TARGET_BRANCH}"
+          if ! git ls-remote --exit-code --heads origin "${RELEASE_BRANCH}" >/dev/null 2>&1; then
+            echo "No release branch found; skipping CI dispatch"
+            exit 0
+          fi
+          gh workflow run CI --ref "${RELEASE_BRANCH}"

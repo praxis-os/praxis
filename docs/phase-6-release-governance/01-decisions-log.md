@@ -153,6 +153,9 @@ existing open release PR is rewritten when the workflow-derived odd-minor
 override changes the generated version or files. The CLI path is used instead
 of the GitHub Action wrapper because praxis relies on a runtime `--release-as`
 override for odd pre-v1 milestones, and the action wrapper ignores that input.
+The workflow signs the generated release commit with the bot identity and then
+dispatches `CI` on the release branch so required merge checks appear on the
+release PR even though the branch update itself is performed by automation.
 
 **Alternatives considered.** (a) `simple` release type — rejected; does not
 understand Go versioning conventions. (b) GoReleaser — rejected; designed for
