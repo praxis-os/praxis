@@ -103,6 +103,7 @@ When the maintainer merges the release PR, the release workflow:
       "release-type": "go",
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": false,
+      "always-update": true,
       "changelog-sections": [
         {"type": "feat", "section": "Added"},
         {"type": "fix", "section": "Fixed"},
@@ -148,6 +149,11 @@ below `v1.0.0`, any unreleased `feat`, `feature`, conventional-commit `!`, or
 `BREAKING CHANGE:` causes the release PR to target the next odd minor
 (`v0.1.x -> v0.3.0`, `v0.3.x -> v0.5.0`). Pure `fix:`/`perf:` releases remain
 patch releases (`v0.1.1`, `v0.1.2`, ...).
+
+`always-update: true` keeps an already-open release PR in sync with the newly
+generated files even when release-please decides the rendered release notes are
+unchanged. This matters for praxis because the odd-minor override is computed
+in the workflow at runtime rather than stored permanently in the manifest.
 
 ### 2.4 The `version.go` File
 

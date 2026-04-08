@@ -5,6 +5,7 @@
       "release-type": "go",
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": false,
+      "always-update": true,
       "changelog-sections": [
         {"type": "feat", "section": "Added"},
         {"type": "fix", "section": "Fixed"},

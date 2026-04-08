@@ -113,6 +113,7 @@ pushes to `main`. Configuration:
       "release-type": "go",
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": false,
+      "always-update": true,
       "changelog-sections": [
         {"type": "feat", "section": "Added"},
         {"type": "fix", "section": "Fixed"},
@@ -143,7 +144,9 @@ additional workflow rule on top: when the manifest version is still `< 1.0.0`,
 any unreleased feature or breaking change is released as the next odd minor
 milestone (`v0.1.x -> v0.3.0`, `v0.3.x -> v0.5.0`). The changelog sections are
 remapped to the keep-a-changelog convention (Added/Fixed/Changed) from
-release-please's default section names.
+release-please's default section names. `always-update: true` is enabled so an
+existing open release PR is rewritten when the workflow-derived odd-minor
+override changes the generated version or files.
 
 **Alternatives considered.** (a) `simple` release type — rejected; does not
 understand Go versioning conventions. (b) GoReleaser — rejected; designed for
