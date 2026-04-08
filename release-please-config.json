@@ -1,9 +1,10 @@
 {
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
   "packages": {
     ".": {
       "release-type": "go",
       "bump-minor-pre-major": true,
-      "bump-patch-for-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": false,
       "changelog-sections": [
         {"type": "feat", "section": "Added"},
         {"type": "fix", "section": "Fixed"},
@@ -11,7 +12,9 @@
         {"type": "perf", "section": "Performance"},
         {"type": "refactor", "section": "Changed"},
         {"type": "test", "section": "Testing"},
-        {"type": "chore", "section": "Maintenance", "hidden": true}
+        {"type": "chore", "section": "Maintenance", "hidden": true},
+        {"type": "ci", "section": "CI", "hidden": true},
+        {"type": "build", "section": "Build", "hidden": true}
       ],
       "extra-files": [
         "internal/version/version.go"
