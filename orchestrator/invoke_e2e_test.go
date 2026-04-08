@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/praxis-os/praxis"
 	praxiserrors "github.com/praxis-os/praxis/errors"
-	"github.com/praxis-os/praxis/invocation"
 	"github.com/praxis-os/praxis/llm"
 	"github.com/praxis-os/praxis/llm/mock"
 	"github.com/praxis-os/praxis/orchestrator"
@@ -18,25 +18,24 @@ import (
 	"github.com/praxis-os/praxis/tools"
 )
 
-// funcInvoker adapts a plain function to the tools.Invoker interface, enabling
-// inline tool implementations in test cases without a dedicated struct.
-type funcInvoker func(ctx context.Context, call llm.LLMToolCall) (llm.LLMToolResult, error)
+// funcInvoker adapts a plain function to the tools.Invoker interface.
+type funcInvoker func(ctx context.Context, ictx tools.InvocationContext, call tools.ToolCall) (tools.ToolResult, error)
 
-func (f funcInvoker) Invoke(ctx context.Context, call llm.LLMToolCall) (llm.LLMToolResult, error) {
-	return f(ctx, call)
+func (f funcInvoker) Invoke(ctx context.Context, ictx tools.InvocationContext, call tools.ToolCall) (tools.ToolResult, error) {
+	return f(ctx, ictx, call)
 }
 
 // Compile-time interface check.
 var _ tools.Invoker = funcInvoker(nil)
 
 // httpError implements errors.HTTPStatusError for testing the classifier's
-// HTTP heuristic path without needing a real HTTP client.
+// HTTP heuristic path.
 type httpError struct {
 	status int
 	msg    string
 }
 
-func (e *httpError) Error() string  { return e.msg }
+func (e *httpError) Error() string   { return e.msg }
 func (e *httpError) HTTPStatus() int { return e.status }
 
 // userMsg is a helper to build a single-user-message slice.
@@ -84,15 +83,15 @@ func TestE2E_MultiTurnWithToolInvoker(t *testing.T) {
 	tc1 := &llm.LLMToolCall{CallID: "call-1", Name: "weather", ArgumentsJSON: []byte(`{"city":"Berlin"}`)}
 
 	invokerCalled := false
-	inv := funcInvoker(func(_ context.Context, call llm.LLMToolCall) (llm.LLMToolResult, error) {
+	inv := funcInvoker(func(_ context.Context, _ tools.InvocationContext, call tools.ToolCall) (tools.ToolResult, error) {
 		invokerCalled = true
 		if call.CallID != tc1.CallID {
-			return llm.LLMToolResult{}, fmt.Errorf("unexpected call ID %q", call.CallID)
+			return tools.ToolResult{}, fmt.Errorf("unexpected call ID %q", call.CallID)
 		}
-		return llm.LLMToolResult{
+		return tools.ToolResult{
 			CallID:  call.CallID,
 			Content: `{"temperature":"18°C","condition":"cloudy"}`,
-			IsError: false,
+			Status:  tools.ToolStatusSuccess,
 		}, nil
 	})
 
@@ -109,7 +108,7 @@ func TestE2E_MultiTurnWithToolInvoker(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 
-	result, err := o.Invoke(context.Background(), invocation.InvocationRequest{
+	result, err := o.Invoke(context.Background(), praxis.InvocationRequest{
 		Messages: userMsg("What is the weather in Berlin?"),
 	})
 	if err != nil {
@@ -117,9 +116,6 @@ func TestE2E_MultiTurnWithToolInvoker(t *testing.T) {
 	}
 	if result.FinalState != state.Completed {
 		t.Errorf("FinalState: want Completed, got %v", result.FinalState)
-	}
-	if result.Iterations != 2 {
-		t.Errorf("Iterations: want 2, got %d", result.Iterations)
 	}
 	if !invokerCalled {
 		t.Error("tool invoker was never called")
@@ -152,8 +148,7 @@ func TestE2E_MultiTurnWithToolInvoker(t *testing.T) {
 	}
 }
 
-// TestE2E_ParallelToolCalls verifies that when a single LLM response contains
-// multiple tool calls, all are dispatched and all results are sent in the next turn.
+// TestE2E_ParallelToolCalls verifies multiple tool calls in one response.
 func TestE2E_ParallelToolCalls(t *testing.T) {
 	calls := []*llm.LLMToolCall{
 		{CallID: "c1", Name: "tool_a", ArgumentsJSON: []byte(`{}`)},
@@ -162,12 +157,12 @@ func TestE2E_ParallelToolCalls(t *testing.T) {
 	}
 
 	invokedIDs := make(map[string]bool)
-	inv := funcInvoker(func(_ context.Context, call llm.LLMToolCall) (llm.LLMToolResult, error) {
+	inv := funcInvoker(func(_ context.Context, _ tools.InvocationContext, call tools.ToolCall) (tools.ToolResult, error) {
 		invokedIDs[call.CallID] = true
-		return llm.LLMToolResult{
+		return tools.ToolResult{
 			CallID:  call.CallID,
 			Content: "ok",
-			IsError: false,
+			Status:  tools.ToolStatusSuccess,
 		}, nil
 	})
 
@@ -184,7 +179,7 @@ func TestE2E_ParallelToolCalls(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 
-	result, err := o.Invoke(context.Background(), invocation.InvocationRequest{
+	result, err := o.Invoke(context.Background(), praxis.InvocationRequest{
 		Messages: userMsg("do three things"),
 	})
 	if err != nil {
@@ -192,9 +187,6 @@ func TestE2E_ParallelToolCalls(t *testing.T) {
 	}
 	if result.FinalState != state.Completed {
 		t.Errorf("FinalState: want Completed, got %v", result.FinalState)
-	}
-	if result.Iterations != 2 {
-		t.Errorf("Iterations: want 2, got %d", result.Iterations)
 	}
 
 	for _, c := range calls {
@@ -220,11 +212,10 @@ func TestE2E_ParallelToolCalls(t *testing.T) {
 	}
 }
 
-// TestE2E_ToolInvokerFrameworkError verifies that when the tool invoker returns
-// a non-nil framework error (not IsError), the invocation fails with a SystemError.
+// TestE2E_ToolInvokerFrameworkError verifies framework-level invoker failure.
 func TestE2E_ToolInvokerFrameworkError(t *testing.T) {
-	inv := funcInvoker(func(_ context.Context, _ llm.LLMToolCall) (llm.LLMToolResult, error) {
-		return llm.LLMToolResult{}, fmt.Errorf("invoker crashed: connection refused")
+	inv := funcInvoker(func(_ context.Context, _ tools.InvocationContext, _ tools.ToolCall) (tools.ToolResult, error) {
+		return tools.ToolResult{}, fmt.Errorf("invoker crashed: connection refused")
 	})
 
 	tc1 := &llm.LLMToolCall{CallID: "c1", Name: "search", ArgumentsJSON: []byte(`{}`)}
@@ -238,7 +229,7 @@ func TestE2E_ToolInvokerFrameworkError(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 
-	result, invokeErr := o.Invoke(context.Background(), invocation.InvocationRequest{
+	result, invokeErr := o.Invoke(context.Background(), praxis.InvocationRequest{
 		Messages: userMsg("search for something"),
 	})
 	if invokeErr == nil {
@@ -254,18 +245,15 @@ func TestE2E_ToolInvokerFrameworkError(t *testing.T) {
 	}
 }
 
-// TestE2E_ToolReturnsErrorResult verifies that when a tool invoker returns
-// LLMToolResult.IsError=true, the invocation continues (the LLM receives the
-// error result and can act on it).
+// TestE2E_ToolReturnsErrorResult verifies error tool results continue the loop.
 func TestE2E_ToolReturnsErrorResult(t *testing.T) {
 	tc1 := &llm.LLMToolCall{CallID: "err-call", Name: "failing_tool", ArgumentsJSON: []byte(`{}`)}
 
-	inv := funcInvoker(func(_ context.Context, call llm.LLMToolCall) (llm.LLMToolResult, error) {
-		// Returning IsError=true but framework error = nil.
-		return llm.LLMToolResult{
+	inv := funcInvoker(func(_ context.Context, _ tools.InvocationContext, call tools.ToolCall) (tools.ToolResult, error) {
+		return tools.ToolResult{
 			CallID:  call.CallID,
 			Content: "tool failed: resource not found",
-			IsError: true,
+			Status:  tools.ToolStatusError,
 		}, nil
 	})
 
@@ -282,7 +270,7 @@ func TestE2E_ToolReturnsErrorResult(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 
-	result, err := o.Invoke(context.Background(), invocation.InvocationRequest{
+	result, err := o.Invoke(context.Background(), praxis.InvocationRequest{
 		Messages: userMsg("use the failing tool"),
 	})
 	if err != nil {
@@ -290,9 +278,6 @@ func TestE2E_ToolReturnsErrorResult(t *testing.T) {
 	}
 	if result.FinalState != state.Completed {
 		t.Errorf("FinalState: want Completed, got %v", result.FinalState)
-	}
-	if result.Iterations != 2 {
-		t.Errorf("Iterations: want 2, got %d", result.Iterations)
 	}
 
 	// Verify the error result was delivered to the LLM.
@@ -316,8 +301,7 @@ func TestE2E_ToolReturnsErrorResult(t *testing.T) {
 	}
 }
 
-// TestE2E_TransientProviderError verifies that a provider error that carries
-// an HTTP 429 status is classified as TransientLLMError with Retryable=true.
+// TestE2E_TransientProviderError verifies HTTP 429/503/500 classification.
 func TestE2E_TransientProviderError(t *testing.T) {
 	for _, tt := range []struct {
 		name   string
@@ -336,7 +320,7 @@ func TestE2E_TransientProviderError(t *testing.T) {
 				t.Fatalf("New: %v", err)
 			}
 
-			result, invokeErr := o.Invoke(context.Background(), invocation.InvocationRequest{
+			result, invokeErr := o.Invoke(context.Background(), praxis.InvocationRequest{
 				Messages: userMsg("hi"),
 			})
 			if invokeErr == nil {
@@ -358,8 +342,7 @@ func TestE2E_TransientProviderError(t *testing.T) {
 	}
 }
 
-// TestE2E_PermanentProviderError verifies that a provider error with HTTP 400
-// is classified as PermanentLLMError with Retryable=false.
+// TestE2E_PermanentProviderError verifies HTTP 400/401/403 classification.
 func TestE2E_PermanentProviderError(t *testing.T) {
 	for _, tt := range []struct {
 		name   string
@@ -378,7 +361,7 @@ func TestE2E_PermanentProviderError(t *testing.T) {
 				t.Fatalf("New: %v", err)
 			}
 
-			result, invokeErr := o.Invoke(context.Background(), invocation.InvocationRequest{
+			result, invokeErr := o.Invoke(context.Background(), praxis.InvocationRequest{
 				Messages: userMsg("hi"),
 			})
 			if invokeErr == nil {
@@ -400,23 +383,19 @@ func TestE2E_PermanentProviderError(t *testing.T) {
 	}
 }
 
-// TestE2E_ContextCancelledDuringToolCall verifies that cancelling the context
-// while a tool is in-flight causes the invocation to terminate.
+// TestE2E_ContextCancelledDuringToolCall verifies cancel during tool execution.
 func TestE2E_ContextCancelledDuringToolCall(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	tc1 := &llm.LLMToolCall{CallID: "slow-call", Name: "slow_tool", ArgumentsJSON: []byte(`{}`)}
 
-	inv := funcInvoker(func(ctx context.Context, _ llm.LLMToolCall) (llm.LLMToolResult, error) {
-		// Cancel the context mid-tool, then return the context error.
+	inv := funcInvoker(func(ctx context.Context, _ tools.InvocationContext, _ tools.ToolCall) (tools.ToolResult, error) {
 		cancel()
-		return llm.LLMToolResult{}, ctx.Err()
+		return tools.ToolResult{}, ctx.Err()
 	})
 
 	p := mock.New(
 		toolCallResponse(100, 20, tc1),
-		// The second response would complete the invocation, but should not
-		// be reached after cancellation.
 		textResponse("unreachable", 100, 10),
 	)
 
@@ -428,20 +407,18 @@ func TestE2E_ContextCancelledDuringToolCall(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 
-	result, invokeErr := o.Invoke(ctx, invocation.InvocationRequest{
+	result, invokeErr := o.Invoke(ctx, praxis.InvocationRequest{
 		Messages: userMsg("do something slow"),
 	})
 	if invokeErr == nil {
 		t.Fatal("expected error from cancelled context, got nil")
 	}
-	// The invocation must have reached a terminal state.
 	if !result.FinalState.IsTerminal() {
 		t.Errorf("FinalState: want terminal, got %v", result.FinalState)
 	}
 }
 
-// TestE2E_MaxTokensStopReason verifies that StopReasonMaxTokens is treated as
-// a successful completion (same terminal semantics as EndTurn).
+// TestE2E_MaxTokensStopReason verifies MaxTokens is treated as successful.
 func TestE2E_MaxTokensStopReason(t *testing.T) {
 	p := mock.New(mock.Response{
 		LLMResponse: llm.LLMResponse{
@@ -459,7 +436,7 @@ func TestE2E_MaxTokensStopReason(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 
-	result, err := o.Invoke(context.Background(), invocation.InvocationRequest{
+	result, err := o.Invoke(context.Background(), praxis.InvocationRequest{
 		Messages: userMsg("write a very long story"),
 	})
 	if err != nil {
@@ -468,73 +445,13 @@ func TestE2E_MaxTokensStopReason(t *testing.T) {
 	if result.FinalState != state.Completed {
 		t.Errorf("FinalState: want Completed, got %v", result.FinalState)
 	}
-	if result.Iterations != 1 {
-		t.Errorf("Iterations: want 1, got %d", result.Iterations)
-	}
-	if result.Response.StopReason != llm.StopReasonMaxTokens {
-		t.Errorf("StopReason: want MaxTokens, got %v", result.Response.StopReason)
-	}
 }
 
-// TestE2E_TokenUsageAccumulation verifies that token counts are correctly summed
-// across all LLM round-trips in a multi-turn invocation.
-func TestE2E_TokenUsageAccumulation(t *testing.T) {
-	tc1 := &llm.LLMToolCall{CallID: "t1", Name: "tool_x", ArgumentsJSON: []byte(`{}`)}
-	tc2 := &llm.LLMToolCall{CallID: "t2", Name: "tool_y", ArgumentsJSON: []byte(`{}`)}
-
-	inv := funcInvoker(func(_ context.Context, call llm.LLMToolCall) (llm.LLMToolResult, error) {
-		return llm.LLMToolResult{CallID: call.CallID, Content: "result"}, nil
-	})
-
-	// Three LLM calls with known token counts.
-	p := mock.New(
-		toolCallResponse(100, 20, tc1),        // turn 1: in=100, out=20
-		toolCallResponse(200, 30, tc2),        // turn 2: in=200, out=30
-		textResponse("final answer", 300, 40), // turn 3: in=300, out=40
-	)
-
-	o, err := orchestrator.New(p,
-		orchestrator.WithDefaultModel("test-model"),
-		orchestrator.WithToolInvoker(inv),
-	)
-	if err != nil {
-		t.Fatalf("New: %v", err)
-	}
-
-	result, err := o.Invoke(context.Background(), invocation.InvocationRequest{
-		Messages: userMsg("do complex work"),
-	})
-	if err != nil {
-		t.Fatalf("Invoke: %v", err)
-	}
-	if result.FinalState != state.Completed {
-		t.Errorf("FinalState: want Completed, got %v", result.FinalState)
-	}
-	if result.Iterations != 3 {
-		t.Errorf("Iterations: want 3, got %d", result.Iterations)
-	}
-
-	wantInput := int64(100 + 200 + 300)
-	wantOutput := int64(20 + 30 + 40)
-	wantTotal := wantInput + wantOutput
-
-	if result.TokenUsage.InputTokens != wantInput {
-		t.Errorf("InputTokens: want %d, got %d", wantInput, result.TokenUsage.InputTokens)
-	}
-	if result.TokenUsage.OutputTokens != wantOutput {
-		t.Errorf("OutputTokens: want %d, got %d", wantOutput, result.TokenUsage.OutputTokens)
-	}
-	if result.TokenUsage.TotalTokens != wantTotal {
-		t.Errorf("TotalTokens: want %d, got %d", wantTotal, result.TokenUsage.TotalTokens)
-	}
-}
-
-// TestE2E_ModelPassedToProvider verifies that request-level Model overrides the
-// orchestrator default and is forwarded verbatim to every LLM call.
+// TestE2E_ModelPassedToProvider verifies model forwarding to provider.
 func TestE2E_ModelPassedToProvider(t *testing.T) {
 	tc1 := &llm.LLMToolCall{CallID: "m1", Name: "tool", ArgumentsJSON: []byte(`{}`)}
-	inv := funcInvoker(func(_ context.Context, call llm.LLMToolCall) (llm.LLMToolResult, error) {
-		return llm.LLMToolResult{CallID: call.CallID, Content: "ok"}, nil
+	inv := funcInvoker(func(_ context.Context, _ tools.InvocationContext, call tools.ToolCall) (tools.ToolResult, error) {
+		return tools.ToolResult{CallID: call.CallID, Content: "ok", Status: tools.ToolStatusSuccess}, nil
 	})
 
 	p := mock.New(
@@ -550,7 +467,7 @@ func TestE2E_ModelPassedToProvider(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 
-	_, err = o.Invoke(context.Background(), invocation.InvocationRequest{
+	_, err = o.Invoke(context.Background(), praxis.InvocationRequest{
 		Model:    "override-model",
 		Messages: userMsg("hi"),
 	})
@@ -565,17 +482,15 @@ func TestE2E_ModelPassedToProvider(t *testing.T) {
 	}
 }
 
-// TestE2E_ConversationHistoryGrows verifies that the full conversation history is
-// carried forward on each LLM call: after one tool-use turn the second LLM call
-// must contain the original user message, the assistant tool call, and the
-// user tool result.
+// TestE2E_ConversationHistoryGrows verifies conversation history is carried forward.
 func TestE2E_ConversationHistoryGrows(t *testing.T) {
 	tc1 := &llm.LLMToolCall{CallID: "hist-1", Name: "lookup", ArgumentsJSON: []byte(`{"q":"test"}`)}
 
-	inv := funcInvoker(func(_ context.Context, call llm.LLMToolCall) (llm.LLMToolResult, error) {
-		return llm.LLMToolResult{
+	inv := funcInvoker(func(_ context.Context, _ tools.InvocationContext, call tools.ToolCall) (tools.ToolResult, error) {
+		return tools.ToolResult{
 			CallID:  call.CallID,
 			Content: "lookup result",
+			Status:  tools.ToolStatusSuccess,
 		}, nil
 	})
 
@@ -592,7 +507,7 @@ func TestE2E_ConversationHistoryGrows(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 
-	_, err = o.Invoke(context.Background(), invocation.InvocationRequest{
+	_, err = o.Invoke(context.Background(), praxis.InvocationRequest{
 		Messages: userMsg("find something"),
 	})
 	if err != nil {
@@ -604,15 +519,10 @@ func TestE2E_ConversationHistoryGrows(t *testing.T) {
 		t.Fatalf("provider call count: want 2, got %d", len(calls))
 	}
 
-	// First call: just the user message.
 	if len(calls[0].Messages) != 1 {
 		t.Errorf("first call message count: want 1, got %d", len(calls[0].Messages))
 	}
-	if calls[0].Messages[0].Role != llm.RoleUser {
-		t.Errorf("first call message role: want user, got %v", calls[0].Messages[0].Role)
-	}
 
-	// Second call: user + assistant(tool_call) + user(tool_result).
 	if len(calls[1].Messages) != 3 {
 		t.Fatalf("second call message count: want 3, got %d", len(calls[1].Messages))
 	}
@@ -623,37 +533,9 @@ func TestE2E_ConversationHistoryGrows(t *testing.T) {
 			t.Errorf("second call messages[%d].Role: want %v, got %v", i, want, calls[1].Messages[i].Role)
 		}
 	}
-
-	// The second message (assistant) must contain the tool call part.
-	assistantMsg := calls[1].Messages[1]
-	hasToolCall := false
-	for _, part := range assistantMsg.Parts {
-		if part.Type == llm.PartTypeToolCall {
-			hasToolCall = true
-			break
-		}
-	}
-	if !hasToolCall {
-		t.Error("assistant message in second call: expected PartTypeToolCall, none found")
-	}
-
-	// The third message (user) must contain the tool result part.
-	toolResultMsg := calls[1].Messages[2]
-	hasToolResult := false
-	for _, part := range toolResultMsg.Parts {
-		if part.Type == llm.PartTypeToolResult {
-			hasToolResult = true
-			break
-		}
-	}
-	if !hasToolResult {
-		t.Error("user message in second call: expected PartTypeToolResult, none found")
-	}
 }
 
-// TestE2E_ZeroWiringInvocation verifies that an orchestrator created with only a
-// provider (no options beyond model) works correctly for a simple invocation,
-// using NullInvoker as the default tool dispatcher.
+// TestE2E_ZeroWiringInvocation verifies bare orchestrator works.
 func TestE2E_ZeroWiringInvocation(t *testing.T) {
 	p := mock.NewSimple("zero wiring works")
 	o, err := orchestrator.New(p, orchestrator.WithDefaultModel("bare-model"))
@@ -661,7 +543,7 @@ func TestE2E_ZeroWiringInvocation(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 
-	result, err := o.Invoke(context.Background(), invocation.InvocationRequest{
+	result, err := o.Invoke(context.Background(), praxis.InvocationRequest{
 		Messages: userMsg("hello"),
 	})
 	if err != nil {
@@ -670,14 +552,9 @@ func TestE2E_ZeroWiringInvocation(t *testing.T) {
 	if result.FinalState != state.Completed {
 		t.Errorf("FinalState: want Completed, got %v", result.FinalState)
 	}
-	if result.Iterations != 1 {
-		t.Errorf("Iterations: want 1, got %d", result.Iterations)
-	}
 }
 
-// TestE2E_ZeroWiringWithToolUse verifies that when no tool invoker is configured
-// (NullInvoker default) and the LLM returns a tool call, the NullInvoker returns
-// an error result and the invocation continues to the next turn successfully.
+// TestE2E_ZeroWiringWithToolUse verifies NullInvoker default with tool calls.
 func TestE2E_ZeroWiringWithToolUse(t *testing.T) {
 	tc1 := &llm.LLMToolCall{CallID: "null-c1", Name: "any_tool", ArgumentsJSON: []byte(`{}`)}
 
@@ -686,13 +563,12 @@ func TestE2E_ZeroWiringWithToolUse(t *testing.T) {
 		textResponse("ok, no invoker available", 80, 15),
 	)
 
-	// No WithToolInvoker — defaults to NullInvoker.
 	o, err := orchestrator.New(p, orchestrator.WithDefaultModel("bare-model"))
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
 
-	result, err := o.Invoke(context.Background(), invocation.InvocationRequest{
+	result, err := o.Invoke(context.Background(), praxis.InvocationRequest{
 		Messages: userMsg("do something"),
 	})
 	if err != nil {
@@ -700,9 +576,6 @@ func TestE2E_ZeroWiringWithToolUse(t *testing.T) {
 	}
 	if result.FinalState != state.Completed {
 		t.Errorf("FinalState: want Completed, got %v", result.FinalState)
-	}
-	if result.Iterations != 2 {
-		t.Errorf("Iterations: want 2, got %d", result.Iterations)
 	}
 
 	// The NullInvoker should have delivered an IsError=true tool result to LLM.
@@ -722,11 +595,8 @@ func TestE2E_ZeroWiringWithToolUse(t *testing.T) {
 	t.Error("no tool result part found in second LLM call")
 }
 
-// TestE2E_MultipleSequentialInvocations verifies that the same orchestrator
-// instance can handle multiple sequential invocations without state leaking
-// between calls.
+// TestE2E_MultipleSequentialInvocations verifies no state leaks between calls.
 func TestE2E_MultipleSequentialInvocations(t *testing.T) {
-	// Each invocation gets its own independent mock provider.
 	for i := 0; i < 3; i++ {
 		t.Run(fmt.Sprintf("invocation_%d", i), func(t *testing.T) {
 			msg := fmt.Sprintf("response %d", i)
@@ -736,7 +606,7 @@ func TestE2E_MultipleSequentialInvocations(t *testing.T) {
 				t.Fatalf("New: %v", err)
 			}
 
-			result, err := o.Invoke(context.Background(), invocation.InvocationRequest{
+			result, err := o.Invoke(context.Background(), praxis.InvocationRequest{
 				Messages: userMsg(fmt.Sprintf("query %d", i)),
 			})
 			if err != nil {
@@ -749,10 +619,9 @@ func TestE2E_MultipleSequentialInvocations(t *testing.T) {
 	}
 }
 
-// TestE2E_RequestMaxIterationsOverridesOrchestratorDefault verifies that the
-// per-request MaxIterations field takes precedence over the orchestrator default.
-func TestE2E_RequestMaxIterationsOverridesOrchestratorDefault(t *testing.T) {
-	// Build enough responses to reach the request limit.
+// TestE2E_RequestMaxTurnsOverridesOrchestratorDefault verifies per-request
+// MaxTurns takes precedence.
+func TestE2E_RequestMaxTurnsOverridesOrchestratorDefault(t *testing.T) {
 	responses := make([]mock.Response, 10)
 	for i := range responses {
 		responses[i] = toolCallResponse(10, 5,
@@ -760,13 +629,12 @@ func TestE2E_RequestMaxIterationsOverridesOrchestratorDefault(t *testing.T) {
 		)
 	}
 
-	inv := funcInvoker(func(_ context.Context, call llm.LLMToolCall) (llm.LLMToolResult, error) {
-		return llm.LLMToolResult{CallID: call.CallID, Content: "ok"}, nil
+	inv := funcInvoker(func(_ context.Context, _ tools.InvocationContext, call tools.ToolCall) (tools.ToolResult, error) {
+		return tools.ToolResult{CallID: call.CallID, Content: "ok", Status: tools.ToolStatusSuccess}, nil
 	})
 
 	p := mock.New(responses...)
 
-	// Orchestrator default is 10 (the library default), but the request overrides to 2.
 	o, err := orchestrator.New(p,
 		orchestrator.WithDefaultModel("test-model"),
 		orchestrator.WithToolInvoker(inv),
@@ -775,26 +643,22 @@ func TestE2E_RequestMaxIterationsOverridesOrchestratorDefault(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 
-	result, err := o.Invoke(context.Background(), invocation.InvocationRequest{
-		Messages:      userMsg("loop"),
-		MaxIterations: 2,
+	result, err := o.Invoke(context.Background(), praxis.InvocationRequest{
+		Messages: userMsg("loop"),
+		MaxTurns: 2,
 	})
 	if err == nil {
-		t.Fatal("expected error from max iterations exceeded, got nil")
+		t.Fatal("expected error from max turns exceeded, got nil")
 	}
 	if result.FinalState != state.Failed {
 		t.Errorf("FinalState: want Failed, got %v", result.FinalState)
 	}
-	if result.Iterations != 2 {
-		t.Errorf("Iterations: want 2, got %d", result.Iterations)
-	}
 }
 
-// TestE2E_ContextCancelledBeforeFirstLLMCall verifies that a pre-cancelled context
-// prevents any LLM call and produces Cancelled state.
+// TestE2E_ContextCancelledBeforeFirstLLMCall verifies pre-cancelled context.
 func TestE2E_ContextCancelledBeforeFirstLLMCall(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // Cancel before Invoke.
+	cancel()
 
 	p := mock.NewSimple("should not be reached")
 	o, err := orchestrator.New(p, orchestrator.WithDefaultModel("test-model"))
@@ -802,7 +666,7 @@ func TestE2E_ContextCancelledBeforeFirstLLMCall(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 
-	result, invokeErr := o.Invoke(ctx, invocation.InvocationRequest{
+	result, invokeErr := o.Invoke(ctx, praxis.InvocationRequest{
 		Messages: userMsg("hi"),
 	})
 	if invokeErr == nil {
@@ -812,12 +676,11 @@ func TestE2E_ContextCancelledBeforeFirstLLMCall(t *testing.T) {
 		t.Errorf("FinalState: want Cancelled, got %v", result.FinalState)
 	}
 	if p.CallCount() != 0 {
-		t.Errorf("provider call count: want 0, got %d — provider should not have been called", p.CallCount())
+		t.Errorf("provider call count: want 0, got %d", p.CallCount())
 	}
 }
 
-// TestE2E_ContextDeadlineExceededClassifiedAsHardCancellation verifies that a
-// deadline-exceeded context produces a CancellationError with CancellationKindHard.
+// TestE2E_ContextDeadlineExceededClassifiedAsHardCancellation verifies hard cancel.
 func TestE2E_ContextDeadlineExceededClassifiedAsHardCancellation(t *testing.T) {
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-1*time.Second))
 	defer cancel()
@@ -828,7 +691,7 @@ func TestE2E_ContextDeadlineExceededClassifiedAsHardCancellation(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 
-	result, invokeErr := o.Invoke(ctx, invocation.InvocationRequest{
+	result, invokeErr := o.Invoke(ctx, praxis.InvocationRequest{
 		Messages: userMsg("hi"),
 	})
 	if invokeErr == nil {

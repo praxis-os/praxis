@@ -171,14 +171,21 @@ func TestSystemErrorNilCause(t *testing.T) {
 }
 
 func TestApprovalRequiredError(t *testing.T) {
-	err := NewApprovalRequiredError("pre_invocation", "sensitive operation")
+	snap := ApprovalSnapshot{
+		Model:        "test-model",
+		SystemPrompt: "be helpful",
+	}
+	err := NewApprovalRequiredError(snap)
 
 	assertKind(t, err, ErrorKindApprovalRequired)
 	assertHTTPStatus(t, err, 202)
 	assertUnwrap(t, err, nil)
 	assertContains(t, err.Error(), "approval required")
-	assertContains(t, err.Error(), "pre_invocation")
-	assertContains(t, err.Error(), "sensitive operation")
+	assertContains(t, err.Error(), "test-model")
+
+	if err.Snapshot.Model != "test-model" {
+		t.Errorf("Snapshot.Model = %q, want %q", err.Snapshot.Model, "test-model")
+	}
 }
 
 func TestErrorsAsChaining(t *testing.T) {
@@ -224,7 +231,7 @@ func TestErrorKindToHTTPStatusMapping(t *testing.T) {
 		{"CancellationSoft", NewCancellationError(CancellationKindSoft, nil), 499},
 		{"CancellationHard", NewCancellationError(CancellationKindHard, nil), 499},
 		{"System", NewSystemError("msg", nil), 500},
-		{"ApprovalRequired", NewApprovalRequiredError("pre", "reason"), 202},
+		{"ApprovalRequired", NewApprovalRequiredError(ApprovalSnapshot{Model: "m"}), 202},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -249,7 +256,7 @@ func TestErrorKindMapping(t *testing.T) {
 		{"BudgetExceeded", NewBudgetExceededError("tok", "1", "2"), ErrorKindBudgetExceeded},
 		{"Cancellation", NewCancellationError(CancellationKindSoft, nil), ErrorKindCancellation},
 		{"System", NewSystemError("msg", nil), ErrorKindSystem},
-		{"ApprovalRequired", NewApprovalRequiredError("pre", "r"), ErrorKindApprovalRequired},
+		{"ApprovalRequired", NewApprovalRequiredError(ApprovalSnapshot{Model: "m"}), ErrorKindApprovalRequired},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
