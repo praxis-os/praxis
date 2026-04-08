@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/praxis-os/praxis/invocation"
+	"github.com/praxis-os/praxis"
 	"github.com/praxis-os/praxis/llm"
 	"github.com/praxis-os/praxis/llm/mock"
 	"github.com/praxis-os/praxis/orchestrator"
@@ -35,7 +35,7 @@ func TestInvoke_SimpleTextResponse(t *testing.T) {
 	p := mock.NewSimple("the answer is 42")
 	o, _ := orchestrator.New(p, orchestrator.WithDefaultModel("test-model"))
 
-	result, err := o.Invoke(context.Background(), invocation.InvocationRequest{
+	result, err := o.Invoke(context.Background(), praxis.InvocationRequest{
 		Messages: []llm.Message{{Role: llm.RoleUser, Parts: []llm.MessagePart{llm.TextPart("question")}}},
 	})
 	if err != nil {
@@ -44,11 +44,8 @@ func TestInvoke_SimpleTextResponse(t *testing.T) {
 	if result.FinalState != state.Completed {
 		t.Errorf("FinalState: want Completed, got %v", result.FinalState)
 	}
-	if result.Iterations != 1 {
-		t.Errorf("Iterations: want 1, got %d", result.Iterations)
-	}
-	if result.Response.StopReason != llm.StopReasonEndTurn {
-		t.Errorf("StopReason: want EndTurn, got %v", result.Response.StopReason)
+	if result.Response == nil {
+		t.Fatal("Response is nil")
 	}
 }
 
@@ -79,7 +76,7 @@ func TestInvoke_ToolUseStubThenComplete(t *testing.T) {
 	)
 	o, _ := orchestrator.New(p, orchestrator.WithDefaultModel("test-model"))
 
-	result, err := o.Invoke(context.Background(), invocation.InvocationRequest{
+	result, err := o.Invoke(context.Background(), praxis.InvocationRequest{
 		Messages: []llm.Message{{Role: llm.RoleUser, Parts: []llm.MessagePart{llm.TextPart("do something")}}},
 	})
 	if err != nil {
@@ -88,14 +85,9 @@ func TestInvoke_ToolUseStubThenComplete(t *testing.T) {
 	if result.FinalState != state.Completed {
 		t.Errorf("FinalState: want Completed, got %v", result.FinalState)
 	}
-	if result.Iterations != 2 {
-		t.Errorf("Iterations: want 2, got %d", result.Iterations)
-	}
-	if result.TokenUsage.InputTokens != 250 {
-		t.Errorf("InputTokens: want 250, got %d", result.TokenUsage.InputTokens)
-	}
-	if result.TokenUsage.OutputTokens != 30 {
-		t.Errorf("OutputTokens: want 30, got %d", result.TokenUsage.OutputTokens)
+	// Verify two LLM calls were made (tool use then completion).
+	if p.CallCount() != 2 {
+		t.Errorf("CallCount: want 2, got %d", p.CallCount())
 	}
 }
 
@@ -103,7 +95,7 @@ func TestInvoke_ProviderError(t *testing.T) {
 	p := mock.New(mock.Response{Err: fmt.Errorf("provider down")})
 	o, _ := orchestrator.New(p, orchestrator.WithDefaultModel("test-model"))
 
-	result, err := o.Invoke(context.Background(), invocation.InvocationRequest{
+	result, err := o.Invoke(context.Background(), praxis.InvocationRequest{
 		Messages: []llm.Message{{Role: llm.RoleUser, Parts: []llm.MessagePart{llm.TextPart("hi")}}},
 	})
 	if err == nil {
@@ -121,7 +113,7 @@ func TestInvoke_ContextCancelled(t *testing.T) {
 	p := mock.NewSimple("won't reach this")
 	o, _ := orchestrator.New(p, orchestrator.WithDefaultModel("test-model"))
 
-	result, err := o.Invoke(ctx, invocation.InvocationRequest{
+	result, err := o.Invoke(ctx, praxis.InvocationRequest{
 		Messages: []llm.Message{{Role: llm.RoleUser, Parts: []llm.MessagePart{llm.TextPart("hi")}}},
 	})
 	if err == nil {
@@ -132,7 +124,7 @@ func TestInvoke_ContextCancelled(t *testing.T) {
 	}
 }
 
-func TestInvoke_MaxIterationsExceeded(t *testing.T) {
+func TestInvoke_MaxTurnsExceeded(t *testing.T) {
 	responses := make([]mock.Response, 5)
 	for i := range responses {
 		responses[i] = mock.Response{
@@ -149,19 +141,16 @@ func TestInvoke_MaxIterationsExceeded(t *testing.T) {
 		}
 	}
 	p := mock.New(responses...)
-	o, _ := orchestrator.New(p, orchestrator.WithDefaultModel("test-model"), orchestrator.WithMaxIterations(3))
+	o, _ := orchestrator.New(p, orchestrator.WithDefaultModel("test-model"), orchestrator.WithMaxTurns(3))
 
-	result, err := o.Invoke(context.Background(), invocation.InvocationRequest{
+	result, err := o.Invoke(context.Background(), praxis.InvocationRequest{
 		Messages: []llm.Message{{Role: llm.RoleUser, Parts: []llm.MessagePart{llm.TextPart("hi")}}},
 	})
 	if err == nil {
-		t.Fatal("expected error from max iterations exceeded")
+		t.Fatal("expected error from max turns exceeded")
 	}
 	if result.FinalState != state.Failed {
 		t.Errorf("FinalState: want Failed, got %v", result.FinalState)
-	}
-	if result.Iterations != 3 {
-		t.Errorf("Iterations: want 3, got %d", result.Iterations)
 	}
 }
 
@@ -169,7 +158,7 @@ func TestInvoke_DefaultModelUsed(t *testing.T) {
 	p := mock.NewSimple("ok")
 	o, _ := orchestrator.New(p, orchestrator.WithDefaultModel("my-model"))
 
-	_, err := o.Invoke(context.Background(), invocation.InvocationRequest{
+	_, err := o.Invoke(context.Background(), praxis.InvocationRequest{
 		Messages: []llm.Message{{Role: llm.RoleUser, Parts: []llm.MessagePart{llm.TextPart("hi")}}},
 	})
 	if err != nil {
@@ -188,7 +177,7 @@ func TestInvoke_RequestModelOverridesDefault(t *testing.T) {
 	p := mock.NewSimple("ok")
 	o, _ := orchestrator.New(p, orchestrator.WithDefaultModel("default-model"))
 
-	_, err := o.Invoke(context.Background(), invocation.InvocationRequest{
+	_, err := o.Invoke(context.Background(), praxis.InvocationRequest{
 		Model:    "override-model",
 		Messages: []llm.Message{{Role: llm.RoleUser, Parts: []llm.MessagePart{llm.TextPart("hi")}}},
 	})
@@ -205,7 +194,7 @@ func TestInvoke_NoModelConfigured(t *testing.T) {
 	p := mock.NewSimple("ok")
 	o, _ := orchestrator.New(p)
 
-	_, err := o.Invoke(context.Background(), invocation.InvocationRequest{
+	_, err := o.Invoke(context.Background(), praxis.InvocationRequest{
 		Messages: []llm.Message{{Role: llm.RoleUser, Parts: []llm.MessagePart{llm.TextPart("hi")}}},
 	})
 	if err == nil {
@@ -213,7 +202,7 @@ func TestInvoke_NoModelConfigured(t *testing.T) {
 	}
 }
 
-func TestWithMaxIterations_Clamping(t *testing.T) {
+func TestWithMaxTurns_Clamping(t *testing.T) {
 	tests := []struct {
 		name  string
 		input int
@@ -227,10 +216,18 @@ func TestWithMaxIterations_Clamping(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := orchestrator.New(mock.NewSimple("ok"), orchestrator.WithMaxIterations(tt.input), orchestrator.WithDefaultModel("m"))
+			_, err := orchestrator.New(mock.NewSimple("ok"), orchestrator.WithMaxTurns(tt.input), orchestrator.WithDefaultModel("m"))
 			if err != nil {
 				t.Fatalf("New: %v", err)
 			}
 		})
+	}
+}
+
+// TestWithMaxIterations_BackwardCompat verifies the deprecated alias works.
+func TestWithMaxIterations_BackwardCompat(t *testing.T) {
+	_, err := orchestrator.New(mock.NewSimple("ok"), orchestrator.WithMaxIterations(5), orchestrator.WithDefaultModel("m"))
+	if err != nil {
+		t.Fatalf("New: %v", err)
 	}
 }

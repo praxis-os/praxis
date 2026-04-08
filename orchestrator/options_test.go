@@ -6,16 +6,16 @@ import (
 	"context"
 	"testing"
 
+	"github.com/praxis-os/praxis"
 	"github.com/praxis-os/praxis/budget"
+	"github.com/praxis-os/praxis/event"
 	"github.com/praxis-os/praxis/credentials"
 	"github.com/praxis-os/praxis/errors"
 	"github.com/praxis-os/praxis/hooks"
-	"github.com/praxis-os/praxis/invocation"
 	"github.com/praxis-os/praxis/llm"
 	"github.com/praxis-os/praxis/llm/mock"
 	"github.com/praxis-os/praxis/orchestrator"
 	"github.com/praxis-os/praxis/state"
-	"github.com/praxis-os/praxis/telemetry"
 	"github.com/praxis-os/praxis/tools"
 )
 
@@ -23,41 +23,50 @@ import (
 
 type stubToolInvoker struct{}
 
-func (stubToolInvoker) Invoke(_ context.Context, call llm.LLMToolCall) (llm.LLMToolResult, error) {
-	return llm.LLMToolResult{CallID: call.CallID, Content: "stub"}, nil
+func (stubToolInvoker) Invoke(_ context.Context, _ tools.InvocationContext, call tools.ToolCall) (tools.ToolResult, error) {
+	return tools.ToolResult{CallID: call.CallID, Content: "stub", Status: tools.ToolStatusSuccess}, nil
 }
 
 type stubPolicyHook struct{}
 
-func (stubPolicyHook) Evaluate(_ context.Context, _ hooks.Phase, _ map[string]string) (hooks.Decision, error) {
+func (stubPolicyHook) Evaluate(_ context.Context, _ hooks.Phase, _ hooks.PolicyInput) (hooks.Decision, error) {
 	return hooks.Allow(), nil
 }
 
 type stubPreLLMFilter struct{}
 
-func (stubPreLLMFilter) Filter(_ context.Context, _ *llm.LLMRequest) error { return nil }
+func (stubPreLLMFilter) Filter(_ context.Context, messages []llm.Message) ([]llm.Message, []hooks.FilterDecision, error) {
+	return messages, nil, nil
+}
 
 type stubPostToolFilter struct{}
 
-func (stubPostToolFilter) Filter(_ context.Context, _ *llm.LLMToolResult) error { return nil }
+func (stubPostToolFilter) Filter(_ context.Context, result tools.ToolResult) (tools.ToolResult, []hooks.FilterDecision, error) {
+	return result, nil, nil
+}
 
 type stubBudgetGuard struct{}
 
-func (stubBudgetGuard) Check(_ context.Context, _ budget.Usage) error { return nil }
+func (stubBudgetGuard) RecordTokens(_ context.Context, _, _ int64) error        { return nil }
+func (stubBudgetGuard) RecordToolCall(_ context.Context) error                   { return nil }
+func (stubBudgetGuard) RecordCost(_ context.Context, _ int64) error              { return nil }
+func (stubBudgetGuard) Check(_ context.Context) (budget.BudgetSnapshot, error)   { return budget.BudgetSnapshot{}, nil }
+func (stubBudgetGuard) Snapshot(_ context.Context) budget.BudgetSnapshot         { return budget.BudgetSnapshot{} }
 
 type stubPriceProvider struct{}
 
-func (stubPriceProvider) InputPricePer1K(_ string) float64  { return 0 }
-func (stubPriceProvider) OutputPricePer1K(_ string) float64 { return 0 }
+func (stubPriceProvider) PriceForToken(_ context.Context, _, _ string, _ budget.TokenDirection) (int64, error) {
+	return 0, nil
+}
 
 type stubLifecycleEmitter struct{}
 
-func (stubLifecycleEmitter) Emit(_ context.Context, _ telemetry.LifecycleEvent) {}
+func (stubLifecycleEmitter) Emit(_ context.Context, _ event.InvocationEvent) error { return nil }
 
 type stubAttributeEnricher struct{}
 
-func (stubAttributeEnricher) Enrich(_ context.Context, attrs map[string]string) map[string]string {
-	return attrs
+func (stubAttributeEnricher) Enrich(_ context.Context) map[string]string {
+	return map[string]string{}
 }
 
 type stubCredentialResolver struct{}
@@ -192,9 +201,6 @@ func TestWithOptions_NonNilSucceeds(t *testing.T) {
 
 // --- TestNew_DefaultsAreNullImplementations ---
 
-// TestNew_DefaultsAreNullImplementations verifies that New(provider) with no
-// options produces a functional orchestrator that can complete a simple
-// invocation. The null defaults must not cause panics or unexpected errors.
 func TestNew_DefaultsAreNullImplementations(t *testing.T) {
 	p := mock.NewSimple("hello")
 	o, err := orchestrator.New(p, orchestrator.WithDefaultModel("test-model"))
@@ -205,8 +211,7 @@ func TestNew_DefaultsAreNullImplementations(t *testing.T) {
 		t.Fatal("New returned nil orchestrator")
 	}
 
-	// A basic invocation must succeed with all null defaults in place.
-	result, err := o.Invoke(context.Background(), invocation.InvocationRequest{
+	result, err := o.Invoke(context.Background(), praxis.InvocationRequest{
 		Messages: []llm.Message{{Role: llm.RoleUser, Parts: []llm.MessagePart{llm.TextPart("hi")}}},
 	})
 	if err != nil {
@@ -223,7 +228,6 @@ func TestOptions_LastWins(t *testing.T) {
 	first := stubToolInvoker{}
 	second := tools.NullInvoker{}
 
-	// Both options accepted — last one must not error.
 	o, err := orchestrator.New(
 		mock.NewSimple("ok"),
 		orchestrator.WithToolInvoker(first),
@@ -263,8 +267,7 @@ func TestOptions_ComposeCorrectly(t *testing.T) {
 		t.Fatal("returned nil orchestrator")
 	}
 
-	// A basic invocation with all options wired must still complete.
-	result, err := o.Invoke(context.Background(), invocation.InvocationRequest{
+	result, err := o.Invoke(context.Background(), praxis.InvocationRequest{
 		Messages: []llm.Message{{Role: llm.RoleUser, Parts: []llm.MessagePart{llm.TextPart("hi")}}},
 	})
 	if err != nil {
@@ -278,12 +281,10 @@ func TestOptions_ComposeCorrectly(t *testing.T) {
 // --- error propagation: first nil option aborts construction ---
 
 func TestNew_FirstNilOptionAbortsConstruction(t *testing.T) {
-	// If the first option fails, the second (valid) option is never applied.
-	// New must return the error from the first failing option.
 	_, err := orchestrator.New(
 		mock.NewSimple("ok"),
-		orchestrator.WithToolInvoker(nil),           // fails
-		orchestrator.WithDefaultModel("my-model"),   // should never run
+		orchestrator.WithToolInvoker(nil),
+		orchestrator.WithDefaultModel("my-model"),
 	)
 	if err == nil {
 		t.Fatal("expected error from nil ToolInvoker option")

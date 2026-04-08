@@ -6,19 +6,19 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/praxis-os/praxis"
 	"github.com/praxis-os/praxis/budget"
 	"github.com/praxis-os/praxis/credentials"
 	"github.com/praxis-os/praxis/errors"
 	"github.com/praxis-os/praxis/hooks"
 	"github.com/praxis-os/praxis/identity"
-	"github.com/praxis-os/praxis/invocation"
 	"github.com/praxis-os/praxis/llm"
 	"github.com/praxis-os/praxis/telemetry"
 	"github.com/praxis-os/praxis/tools"
 )
 
 const (
-	defaultMaxIterations = 10
+	defaultMaxTurns = 10
 )
 
 // Orchestrator runs agent invocations through the praxis state machine.
@@ -29,9 +29,9 @@ const (
 //
 // Create an Orchestrator with [New].
 type Orchestrator struct {
-	provider      llm.Provider
-	defaultModel  string
-	maxIterations int
+	provider     llm.Provider
+	defaultModel string
+	maxTurns     int
 
 	toolInvoker        tools.Invoker
 	policyHook         hooks.PolicyHook
@@ -53,12 +53,12 @@ type Orchestrator struct {
 // an error, New returns that error immediately.
 //
 // Default values:
-//   - maxIterations: 10
+//   - maxTurns: 10
 //   - defaultModel: "" (provider's own default)
 //   - toolInvoker: tools.NullInvoker{}
 //   - policyHook: hooks.AllowAllPolicyHook{}
-//   - preLLMFilter: hooks.NoOpPreLLMFilter{}
-//   - postToolFilter: hooks.NoOpPostToolFilter{}
+//   - preLLMFilter: hooks.PassThroughPreLLMFilter{}
+//   - postToolFilter: hooks.PassThroughPostToolFilter{}
 //   - budgetGuard: budget.NullGuard{}
 //   - priceProvider: budget.NullPriceProvider{}
 //   - lifecycleEmitter: telemetry.NullEmitter{}
@@ -73,11 +73,11 @@ func New(provider llm.Provider, opts ...Option) (*Orchestrator, error) {
 
 	o := &Orchestrator{
 		provider:           provider,
-		maxIterations:      defaultMaxIterations,
+		maxTurns:           defaultMaxTurns,
 		toolInvoker:        tools.NullInvoker{},
 		policyHook:         hooks.AllowAllPolicyHook{},
-		preLLMFilter:       hooks.NoOpPreLLMFilter{},
-		postToolFilter:     hooks.NoOpPostToolFilter{},
+		preLLMFilter:       hooks.PassThroughPreLLMFilter{},
+		postToolFilter:     hooks.PassThroughPostToolFilter{},
 		budgetGuard:        budget.NullGuard{},
 		priceProvider:      budget.NullPriceProvider{},
 		lifecycleEmitter:   telemetry.NullEmitter{},
@@ -105,19 +105,19 @@ func New(provider llm.Provider, opts ...Option) (*Orchestrator, error) {
 // Invoke respects ctx cancellation at each blocking point. A cancelled
 // context causes the invocation to terminate with a [state.Cancelled]
 // terminal state and a CancellationError.
-func (o *Orchestrator) Invoke(ctx context.Context, req invocation.InvocationRequest) (invocation.InvocationResult, error) {
+func (o *Orchestrator) Invoke(ctx context.Context, req praxis.InvocationRequest) (*praxis.InvocationResult, error) {
 	model := req.Model
 	if model == "" {
 		model = o.defaultModel
 	}
 	if model == "" {
-		return invocation.InvocationResult{}, fmt.Errorf("orchestrator: no model configured: set WithDefaultModel or InvocationRequest.Model")
+		return nil, fmt.Errorf("orchestrator: no model configured: set WithDefaultModel or InvocationRequest.Model")
 	}
 
-	maxIter := req.MaxIterations
-	if maxIter <= 0 {
-		maxIter = o.maxIterations
+	maxTurns := req.MaxTurns
+	if maxTurns <= 0 {
+		maxTurns = o.maxTurns
 	}
 
-	return runInvocation(ctx, o, model, maxIter, req)
+	return runInvocation(ctx, o, model, maxTurns, req)
 }

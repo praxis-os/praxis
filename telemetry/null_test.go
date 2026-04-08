@@ -7,82 +7,45 @@ import (
 	"testing"
 	"time"
 
+	"github.com/praxis-os/praxis/event"
 	"github.com/praxis-os/praxis/telemetry"
 )
 
 func TestInterfaces(_ *testing.T) {
-	// Compile-time checks documented as runtime assertions.
 	var _ telemetry.LifecycleEventEmitter = telemetry.NullEmitter{}
 	var _ telemetry.AttributeEnricher = telemetry.NullEnricher{}
 }
 
-func TestNullEmitter_Emit(_ *testing.T) {
+func TestNullEmitter_Emit(t *testing.T) {
 	emitter := telemetry.NullEmitter{}
 
-	// Emit must not panic for any input.
-	events := []telemetry.LifecycleEvent{
+	events := []event.InvocationEvent{
 		{},
 		{
 			InvocationID: "inv-1",
-			State:        "running",
-			Timestamp:    time.Now(),
-			Attributes:   map[string]string{"key": "value"},
+			At:           time.Now(),
 		},
 		{
 			InvocationID: "inv-2",
-			State:        "error",
-			Timestamp:    time.Now(),
-			Attributes:   nil,
+			At:           time.Now(),
 		},
 	}
 
 	for _, event := range events {
-		// Should not panic.
-		emitter.Emit(context.Background(), event)
+		if err := emitter.Emit(context.Background(), event); err != nil {
+			t.Errorf("Emit() unexpected error: %v", err)
+		}
 	}
 }
 
 func TestNullEnricher_Enrich(t *testing.T) {
 	enricher := telemetry.NullEnricher{}
 
-	tests := []struct {
-		name  string
-		attrs map[string]string
-	}{
-		{
-			name:  "nil map is returned unchanged",
-			attrs: nil,
-		},
-		{
-			name:  "empty map is returned unchanged",
-			attrs: map[string]string{},
-		},
-		{
-			name:  "populated map is returned unchanged",
-			attrs: map[string]string{"trace_id": "abc123", "span_id": "xyz"},
-		},
+	got := enricher.Enrich(context.Background())
+	if got == nil {
+		t.Error("Enrich() returned nil, want empty map")
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := enricher.Enrich(context.Background(), tt.attrs)
-
-			// NullEnricher returns the same map reference.
-			if tt.attrs == nil {
-				if got != nil {
-					t.Errorf("Enrich(nil) = %v, want nil", got)
-				}
-				return
-			}
-
-			if len(got) != len(tt.attrs) {
-				t.Errorf("Enrich() returned map with %d entries, want %d", len(got), len(tt.attrs))
-			}
-			for k, v := range tt.attrs {
-				if got[k] != v {
-					t.Errorf("Enrich() key %q = %q, want %q", k, got[k], v)
-				}
-			}
-		})
+	if len(got) != 0 {
+		t.Errorf("Enrich() returned %d entries, want 0", len(got))
 	}
 }

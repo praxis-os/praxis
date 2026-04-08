@@ -70,47 +70,51 @@ who fork or vendor the package.
 
 ---
 
-## D32 — `InvocationEvent` package placement: `praxis` root package
+## D32 — `InvocationEvent` package placement: `event/` sub-package
 
-**Status:** decided
-**Summary:** `InvocationEvent` and `EventType` live in the `praxis` root package.
+**Status:** decided (amended during v0.3.0 implementation)
+**Summary:** `InvocationEvent`, `EventType`, and all 21 event-type constants
+live in the `event/` sub-package. The root `praxis` package references
+`event.InvocationEvent` in `InvocationResult.Events`.
 
-**Decision.** `InvocationEvent`, `EventType`, and all 19 event-type constants
-are exported from the `praxis` root package. The `AgentOrchestrator` facade
-lives in the `praxis` root package as well (not a sub-package).
+**Decision.** `InvocationEvent`, `EventType`, and all 21 event-type constants
+(D18, D52b) are exported from the `event/` sub-package. The `Orchestrator`
+lives in `orchestrator/` (per D51). The root `praxis` package holds
+`InvocationRequest` and `InvocationResult`, with the latter importing `event/`
+for the `Events` field.
 
-**Repository layout implication.** The seed §7 shows `orchestrator/` as a
-sub-package; this decision amends the layout. The root package `praxis` is the
-single import path a consumer needs for the primary usage pattern:
+**Repository layout implication.** Consumers of `InvokeStream` import two
+packages: `praxis` (for `InvocationRequest`) and `event` (for event types).
+This is one more import than the original D32 proposed, but keeps the root
+package lean and separates event concerns into a dedicated package:
 
 ```go
-import "MODULE_PATH_TBD"
+import (
+    "github.com/praxis-os/praxis"
+    "github.com/praxis-os/praxis/event"
+    "github.com/praxis-os/praxis/orchestrator"
+)
 
-orch := praxis.NewOrchestrator(provider)
+orch, _ := orchestrator.New(provider)
 events := orch.InvokeStream(ctx, req)
 for e := range events {
     switch e.Type {
-    case praxis.EventTypeToolCallStarted:
+    case event.EventTypeToolCallStarted:
         // ...
     }
 }
 ```
 
-No sub-package import is required to drain the stream. Sub-packages
-(`llm`, `tools`, `hooks`, `budget`, `errors`, `telemetry`, `credentials`,
-`identity`, `state`) continue to exist for their respective type definitions and
-default implementations; they are imported when the caller wires up
-non-default dependencies.
+Sub-packages (`llm`, `tools`, `hooks`, `budget`, `errors`, `telemetry`,
+`credentials`, `identity`, `state`) continue to exist for their respective
+type definitions and default implementations; they are imported when the
+caller wires up non-default dependencies.
 
-**Import cycle analysis.** Moving `AgentOrchestrator` and `InvocationEvent` to
-the root package resolves the import cycle risk flagged in the `00-plan.md`
-key questions: `tools.Invoker` receives a `tools.InvocationContext` (defined in
-the `tools` package), and `budget.Guard` receives a `budget.BudgetSnapshot`
-(defined in the `budget` package). Neither sub-package needs to import `praxis`
-root for these operations. The root package imports the sub-packages
-(`llm`, `tools`, `hooks`, `budget`, `errors`, `telemetry`, `credentials`,
-`identity`, `state`) to wire the constructor and define `InvocationRequest` and
-`InvocationResult`. Sub-packages do not import the root. No cycle.
+**Import cycle analysis.** The `event/` package imports only leaf packages
+(`state`, `budget`, `errors`) — no cycle risk. The root `praxis` package
+imports `event/` for `InvocationResult.Events`. `telemetry/` imports `event/`
+for the `LifecycleEventEmitter` interface. `orchestrator/` imports both
+`praxis` and `event/`. No circular dependencies exist.
 
 **Alternatives considered.** (a) `orchestrator/` sub-package for
 `AgentOrchestrator` and `InvocationEvent` — rejected. Consumers must import
@@ -1180,7 +1184,7 @@ Updated tier count: 13 of 14 interfaces at `frozen-v1.0`; 1
 | ID | Topic | Status |
 |---|---|---|
 | D31 | `EventType` typed string | decided |
-| D32 | `InvocationEvent` in `praxis` root package | decided |
+| D32 | `InvocationEvent` in `event/` sub-package | decided (amended) |
 | D33 | `Decision` struct with `Verdict` + `Metadata` | decided |
 | D34 | `budget.Guard` dimension-additive + `Check` | decided |
 | D35 | `BudgetSnapshot` value struct with 5 fields | decided |

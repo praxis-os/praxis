@@ -2,7 +2,7 @@
 
 **Stability tier:** `frozen-v1.0`
 **Decisions:** D31, D32
-**Packages:** `MODULE_PATH_TBD` (EventType, InvocationEvent exported from root),
+**Packages:** `MODULE_PATH_TBD/event` (EventType, InvocationEvent),
 `MODULE_PATH_TBD/telemetry` (LifecycleEventEmitter, AttributeEnricher)
 
 ---
@@ -14,9 +14,9 @@ delivers framework-defined events to a caller's observability backend, and
 `AttributeEnricher` contributes caller-specific attributes to every span and
 event without the framework needing to know their names.
 
-The `EventType` constants and `InvocationEvent` struct live in the `praxis`
-root package (D32) so consumers can drain the `InvokeStream` channel without
-importing any sub-package.
+The `EventType` constants and `InvocationEvent` struct live in the `event/`
+sub-package (D32, amended) so event concerns are cleanly separated from the
+root package.
 
 ---
 

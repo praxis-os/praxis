@@ -2,7 +2,12 @@
 
 package errors
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/praxis-os/praxis/budget"
+	"github.com/praxis-os/praxis/llm"
+)
 
 // TransientLLMError represents a retryable LLM provider error (e.g., HTTP 429, 503).
 // Retry policy: 3 retries with exponential backoff + jitter, base 500ms.
@@ -204,22 +209,46 @@ func (e *SystemError) Kind() ErrorKind     { return ErrorKindSystem }
 func (e *SystemError) HTTPStatusCode() int { return 500 }
 func (e *SystemError) Unwrap() error       { return e.cause }
 
+// ApprovalSnapshot captures the invocation state at the point where approval
+// was requested, enabling the caller to resume or audit the invocation.
+//
+// Fields are inlined rather than referencing root package types to avoid
+// an import cycle (root praxis imports errors).
+type ApprovalSnapshot struct {
+	// Messages is the conversation history at the time of the approval request.
+	Messages []llm.Message
+
+	// Model is the LLM model identifier being used.
+	Model string
+
+	// SystemPrompt is the system prompt, if any.
+	SystemPrompt string
+
+	// BudgetAtApproval is the budget consumption snapshot at the time of
+	// the approval request.
+	BudgetAtApproval budget.BudgetSnapshot
+
+	// ApprovalMetadata carries arbitrary data from the policy hook's Decision.
+	ApprovalMetadata map[string]any
+
+	// RequestMetadata is the caller-supplied metadata from the InvocationRequest.
+	RequestMetadata map[string]string
+}
+
 // ApprovalRequiredError indicates that a policy hook requires human approval
 // before the invocation can continue. This is terminal but not a failure.
 type ApprovalRequiredError struct {
-	// Phase is the hook phase at which approval was requested.
-	Phase string
-	// Reason explains why approval is needed.
-	Reason string
+	// Snapshot captures the invocation state at the point of approval request.
+	Snapshot ApprovalSnapshot
 }
 
-// NewApprovalRequiredError creates an ApprovalRequiredError.
-func NewApprovalRequiredError(phase, reason string) *ApprovalRequiredError {
-	return &ApprovalRequiredError{Phase: phase, Reason: reason}
+// NewApprovalRequiredError creates an ApprovalRequiredError with the given snapshot.
+func NewApprovalRequiredError(snapshot ApprovalSnapshot) *ApprovalRequiredError {
+	return &ApprovalRequiredError{Snapshot: snapshot}
 }
 
 func (e *ApprovalRequiredError) Error() string {
-	return fmt.Sprintf("approval required at %s: %s", e.Phase, e.Reason)
+	return fmt.Sprintf("approval required: %s", e.Snapshot.Model)
 }
 
 func (e *ApprovalRequiredError) Kind() ErrorKind     { return ErrorKindApprovalRequired }

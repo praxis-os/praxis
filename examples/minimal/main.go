@@ -13,7 +13,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/praxis-os/praxis/invocation"
+	"github.com/praxis-os/praxis"
 	"github.com/praxis-os/praxis/llm"
 	"github.com/praxis-os/praxis/llm/anthropic"
 	"github.com/praxis-os/praxis/orchestrator"
@@ -34,7 +34,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	req := invocation.InvocationRequest{
+	req := praxis.InvocationRequest{
 		Model: "claude-haiku-4-20250514",
 		Messages: []llm.Message{
 			{
@@ -50,9 +50,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	for _, part := range result.Response.Message.Parts {
-		if part.Type == llm.PartTypeText {
-			fmt.Println(part.Text)
+	if result.Response != nil {
+		for _, part := range result.Response.Parts {
+			if part.Type == llm.PartTypeText {
+				fmt.Println(part.Text)
+			}
 		}
 	}
 }
