@@ -159,7 +159,11 @@ The release workflow also passes `--signoff` when generating the release PR
 commit so the DCO check stays green, then dispatches the `CI` workflow against
 the `release-please--branches--main` branch. That explicit dispatch is needed
 because pushes made with the workflow token do not automatically trigger the
-normal `pull_request` workflow for the generated release branch.
+normal `pull_request` workflow for the generated release branch. The required
+CI jobs therefore publish commit statuses back onto the release branch commit
+when they run under `workflow_dispatch`, so branch protection still receives
+the expected `lint`, `test`, `commitsar`, `banned-grep`, `spdx-check`, and
+`dco` contexts.
 
 ### 2.4 The `version.go` File
 

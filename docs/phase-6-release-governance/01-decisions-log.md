@@ -154,8 +154,11 @@ override changes the generated version or files. The CLI path is used instead
 of the GitHub Action wrapper because praxis relies on a runtime `--release-as`
 override for odd pre-v1 milestones, and the action wrapper ignores that input.
 The workflow signs the generated release commit with the bot identity and then
-dispatches `CI` on the release branch so required merge checks appear on the
-release PR even though the branch update itself is performed by automation.
+dispatches `CI` on the release branch. Because `workflow_dispatch` runs do not
+surface automatically as PR checks for a release-please branch updated by the
+workflow token, the required CI jobs also publish explicit commit statuses on
+the generated release commit so branch protection can still see `lint`,
+`test`, `commitsar`, `banned-grep`, `spdx-check`, and `dco`.
 
 **Alternatives considered.** (a) `simple` release type — rejected; does not
 understand Go versioning conventions. (b) GoReleaser — rejected; designed for

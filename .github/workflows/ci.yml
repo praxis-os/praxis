@@ -5,12 +5,24 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+  statuses: write
+
 jobs:
   lint:
     name: lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Publish pending status
+        if: github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, 'release-please--branches--')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS_CONTEXT: ${{ github.job }}
+          STATUS_STATE: pending
+          STATUS_DESCRIPTION: CI running via workflow_dispatch
+        run: .github/scripts/publish-dispatched-status.sh
       - uses: actions/setup-go@v5
         with:
           go-version: "1.26.x"
@@ -18,12 +30,36 @@ jobs:
         run: |
           go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
           golangci-lint run
+      - name: Publish success status
+        if: success() && github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, 'release-please--branches--')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS_CONTEXT: ${{ github.job }}
+          STATUS_STATE: success
+          STATUS_DESCRIPTION: CI passed via workflow_dispatch
+        run: .github/scripts/publish-dispatched-status.sh
+      - name: Publish failure status
+        if: failure() && github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, 'release-please--branches--')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS_CONTEXT: ${{ github.job }}
+          STATUS_STATE: failure
+          STATUS_DESCRIPTION: CI failed via workflow_dispatch
+        run: .github/scripts/publish-dispatched-status.sh
 
   test:
     name: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Publish pending status
+        if: github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, 'release-please--branches--')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS_CONTEXT: ${{ github.job }}
+          STATUS_STATE: pending
+          STATUS_DESCRIPTION: CI running via workflow_dispatch
+        run: .github/scripts/publish-dispatched-status.sh
       - uses: actions/setup-go@v5
         with:
           go-version: "1.26.x"
@@ -38,6 +74,22 @@ jobs:
             echo "Coverage ${COVERAGE}% is below the 85% threshold (D86)"
             exit 1
           fi
+      - name: Publish success status
+        if: success() && github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, 'release-please--branches--')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS_CONTEXT: ${{ github.job }}
+          STATUS_STATE: success
+          STATUS_DESCRIPTION: CI passed via workflow_dispatch
+        run: .github/scripts/publish-dispatched-status.sh
+      - name: Publish failure status
+        if: failure() && github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, 'release-please--branches--')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS_CONTEXT: ${{ github.job }}
+          STATUS_STATE: failure
+          STATUS_DESCRIPTION: CI failed via workflow_dispatch
+        run: .github/scripts/publish-dispatched-status.sh
 
   commitsar:
     name: commitsar
@@ -46,23 +98,100 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: aevea/commitsar@v0.20.2
+      - name: Publish pending status
+        if: github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, 'release-please--branches--')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS_CONTEXT: ${{ github.job }}
+          STATUS_STATE: pending
+          STATUS_DESCRIPTION: CI running via workflow_dispatch
+        run: .github/scripts/publish-dispatched-status.sh
+      - name: Run commitsar on PR commits
+        if: github.event_name == 'pull_request'
+        uses: aevea/commitsar@v0.20.2
+      - name: Validate release-branch commit headers
+        if: github.event_name == 'workflow_dispatch'
+        run: .github/scripts/validate-release-branch-commits.sh
+      - name: Publish success status
+        if: success() && github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, 'release-please--branches--')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS_CONTEXT: ${{ github.job }}
+          STATUS_STATE: success
+          STATUS_DESCRIPTION: CI passed via workflow_dispatch
+        run: .github/scripts/publish-dispatched-status.sh
+      - name: Publish failure status
+        if: failure() && github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, 'release-please--branches--')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS_CONTEXT: ${{ github.job }}
+          STATUS_STATE: failure
+          STATUS_DESCRIPTION: CI failed via workflow_dispatch
+        run: .github/scripts/publish-dispatched-status.sh
 
   banned-grep:
     name: banned-grep
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Publish pending status
+        if: github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, 'release-please--branches--')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS_CONTEXT: ${{ github.job }}
+          STATUS_STATE: pending
+          STATUS_DESCRIPTION: CI running via workflow_dispatch
+        run: .github/scripts/publish-dispatched-status.sh
       - name: Check for banned identifiers
         run: make banned-grep
+      - name: Publish success status
+        if: success() && github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, 'release-please--branches--')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS_CONTEXT: ${{ github.job }}
+          STATUS_STATE: success
+          STATUS_DESCRIPTION: CI passed via workflow_dispatch
+        run: .github/scripts/publish-dispatched-status.sh
+      - name: Publish failure status
+        if: failure() && github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, 'release-please--branches--')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS_CONTEXT: ${{ github.job }}
+          STATUS_STATE: failure
+          STATUS_DESCRIPTION: CI failed via workflow_dispatch
+        run: .github/scripts/publish-dispatched-status.sh
 
   spdx-check:
     name: spdx-check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Publish pending status
+        if: github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, 'release-please--branches--')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS_CONTEXT: ${{ github.job }}
+          STATUS_STATE: pending
+          STATUS_DESCRIPTION: CI running via workflow_dispatch
+        run: .github/scripts/publish-dispatched-status.sh
       - name: Check SPDX headers on all Go files
         run: make spdx-check
+      - name: Publish success status
+        if: success() && github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, 'release-please--branches--')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS_CONTEXT: ${{ github.job }}
+          STATUS_STATE: success
+          STATUS_DESCRIPTION: CI passed via workflow_dispatch
+        run: .github/scripts/publish-dispatched-status.sh
+      - name: Publish failure status
+        if: failure() && github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, 'release-please--branches--')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS_CONTEXT: ${{ github.job }}
+          STATUS_STATE: failure
+          STATUS_DESCRIPTION: CI failed via workflow_dispatch
+        run: .github/scripts/publish-dispatched-status.sh
 
   dco:
     name: dco
@@ -71,6 +200,14 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Publish pending status
+        if: github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, 'release-please--branches--')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS_CONTEXT: ${{ github.job }}
+          STATUS_STATE: pending
+          STATUS_DESCRIPTION: CI running via workflow_dispatch
+        run: .github/scripts/publish-dispatched-status.sh
       # Validates that every non-merge commit in the PR carries a
       # Signed-off-by: line (DCO v1.1, D92). probot/dco is the org-level
       # GitHub App enforcing this as a required check; this step provides
@@ -91,6 +228,22 @@ jobs:
             exit 1
           fi
           echo "DCO check: PASS"
+      - name: Publish success status
+        if: success() && github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, 'release-please--branches--')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS_CONTEXT: ${{ github.job }}
+          STATUS_STATE: success
+          STATUS_DESCRIPTION: CI passed via workflow_dispatch
+        run: .github/scripts/publish-dispatched-status.sh
+      - name: Publish failure status
+        if: failure() && github.event_name == 'workflow_dispatch' && startsWith(github.ref_name, 'release-please--branches--')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS_CONTEXT: ${{ github.job }}
+          STATUS_STATE: failure
+          STATUS_DESCRIPTION: CI failed via workflow_dispatch
+        run: .github/scripts/publish-dispatched-status.sh
 
   bench:
     name: bench

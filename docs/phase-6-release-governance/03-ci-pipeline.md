@@ -373,6 +373,10 @@ jobs:
       - run: gh workflow run CI --ref release-please--branches--main
 ```
 
+The dispatched `CI` workflow publishes explicit commit statuses for the six
+required contexts because `workflow_dispatch` runs on a release-please branch
+do not automatically appear as PR checks under GitHub branch protection.
+
 When the release PR is merged, release-please creates the tag and GitHub
 release. No additional steps are needed — the Go module proxy
 (`proxy.golang.org`) fetches the tag automatically.
