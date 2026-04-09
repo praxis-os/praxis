@@ -86,82 +86,88 @@
 | T8.3 | PRAX-77 | PRAX-16 | CHANGELOG.md via release-please | Done | v0.1.0 tag |
 
 ## Subtasks — v0.3.0
-| ID | Key | Story | Title |
-|----|-----|-------|-------|
-| T9.1 | PRAX-78 | PRAX-17 | InvocationEvent type (21 event types) |
-| T9.2 | PRAX-79 | PRAX-17 | InvokeStream with 16-event buffer channel |
-| T9.3 | PRAX-80 | PRAX-17 | sync.Once channel close protocol |
-| T9.4 | PRAX-81 | PRAX-17 | Backpressure handling |
-| T10.1 | PRAX-82 | PRAX-18 | Soft cancel with 500ms grace |
-| T10.2 | PRAX-83 | PRAX-18 | Hard cancel on deadline/budget breach |
-| T10.3 | PRAX-84 | PRAX-18 | Terminal event emission (detached context) |
-| T10.4 | PRAX-85 | PRAX-18 | internal/ctxutil.DetachedWithSpan |
-| T11.1 | PRAX-86 | PRAX-19 | hooks.Phase (4 phases) |
-| T11.2 | PRAX-87 | PRAX-19 | hooks.Decision type |
-| T11.3 | PRAX-88 | PRAX-19 | PolicyHook chain execution |
-| T11.4 | PRAX-89 | PRAX-19 | ApprovalRequired terminal state |
-| T12.1 | PRAX-90 | PRAX-20 | PreLLMFilter chain |
-| T12.2 | PRAX-91 | PRAX-20 | PostToolFilter chain |
-| T12.3 | PRAX-92 | PRAX-20 | FilterDecision type |
-| T13.1 | PRAX-93 | PRAX-21 | budget.Guard implementation |
-| T13.2 | PRAX-94 | PRAX-21 | Wall-clock duration enforcement |
-| T13.3 | PRAX-95 | PRAX-21 | Token count enforcement |
-| T13.4 | PRAX-96 | PRAX-21 | Tool call count enforcement |
-| T13.5 | PRAX-97 | PRAX-21 | Cost estimate enforcement (micro-dollars) |
-| T13.6 | PRAX-98 | PRAX-21 | PriceProvider per-invocation snapshot |
-| T13.7 | PRAX-99 | PRAX-21 | BudgetExceeded terminal state |
-| T14.1 | PRAX-100 | PRAX-22 | telemetry.OTelEmitter (span tree) |
-| T14.2 | PRAX-101 | PRAX-22 | 21 InvocationEvent emission |
-| T14.3 | PRAX-102 | PRAX-22 | AttributeEnricher flow |
-| T14.4 | PRAX-103 | PRAX-22 | MetricsRecorder interface |
-| T15.1 | PRAX-104 | PRAX-23 | openai.Provider implementation |
-| T15.2 | PRAX-105 | PRAX-23 | Azure OpenAI via base-URL |
-| T15.3 | PRAX-106 | PRAX-23 | Shared conformance suite |
-| T16.1 | PRAX-107 | PRAX-24 | 14 interfaces at Phase 3 surfaces |
-| T16.2 | PRAX-108 | PRAX-24 | Property tests 10k CI + 100k nightly |
-| T16.3 | PRAX-109 | PRAX-24 | 85% coverage maintained |
-| T16.4 | PRAX-110 | PRAX-24 | Nightly conformance suite |
-| T17.1 | PRAX-111 | PRAX-25 | examples/tools/ |
-| T17.2 | PRAX-112 | PRAX-25 | examples/policy/ |
-| T17.3 | PRAX-113 | PRAX-25 | examples/filters/ |
-| T17.4 | PRAX-114 | PRAX-25 | examples/streaming/ |
+| ID | Key | Story | Title | Status |
+|----|-----|-------|-------|--------|
+| T9.1 | PRAX-78 | PRAX-17 | InvocationEvent type (21 event types) | Done |
+| T9.2 | PRAX-79 | PRAX-17 | InvokeStream with 16-event buffer channel | Done |
+| T9.3 | PRAX-80 | PRAX-17 | sync.Once channel close protocol | Done |
+| T9.4 | PRAX-81 | PRAX-17 | Backpressure handling | Done |
+| T10.1 | PRAX-82 | PRAX-18 | Soft cancel with 500ms grace | Done |
+| T10.2 | PRAX-83 | PRAX-18 | Hard cancel on deadline/budget breach | Done |
+| T10.3 | PRAX-84 | PRAX-18 | Terminal event emission (detached context) | Done |
+| T10.4 | PRAX-85 | PRAX-18 | internal/ctxutil.DetachedWithSpan | Done |
+| T11.1 | PRAX-86 | PRAX-19 | hooks.Phase (4 phases) | Done |
+| T11.2 | PRAX-87 | PRAX-19 | hooks.Decision type | Done |
+| T11.3 | PRAX-88 | PRAX-19 | PolicyHook chain execution | Done |
+| T11.4 | PRAX-89 | PRAX-19 | ApprovalRequired terminal state | Done |
+| T12.1 | PRAX-90 | PRAX-20 | PreLLMFilter chain | Done |
+| T12.2 | PRAX-91 | PRAX-20 | PostToolFilter chain | Done |
+| T12.3 | PRAX-92 | PRAX-20 | FilterDecision type | Done |
+| T13.1 | PRAX-93 | PRAX-21 | budget.Guard implementation | Done |
+| T13.2 | PRAX-94 | PRAX-21 | Wall-clock duration enforcement | Done |
+| T13.3 | PRAX-95 | PRAX-21 | Token count enforcement | Done |
+| T13.4 | PRAX-96 | PRAX-21 | Tool call count enforcement | Done |
+| T13.5 | PRAX-97 | PRAX-21 | Cost estimate enforcement (micro-dollars) | Done |
+| T13.6 | PRAX-98 | PRAX-21 | PriceProvider per-invocation snapshot | Done |
+| T13.7 | PRAX-99 | PRAX-21 | BudgetExceeded terminal state | Done |
+| T14.1 | PRAX-100 | PRAX-22 | telemetry.OTelEmitter (span tree) | Done |
+| T14.2 | PRAX-101 | PRAX-22 | 21 InvocationEvent emission | Done |
+| T14.3 | PRAX-102 | PRAX-22 | AttributeEnricher flow | Done |
+| T14.4 | PRAX-103 | PRAX-22 | MetricsRecorder interface | Done |
+| T15.1 | PRAX-104 | PRAX-23 | openai.Provider implementation | Done |
+| T15.2 | PRAX-105 | PRAX-23 | Azure OpenAI via base-URL | Done |
+| T15.3 | PRAX-106 | PRAX-23 | Shared conformance suite | Done |
+| T16.1 | PRAX-107 | PRAX-24 | 14 interfaces at Phase 3 surfaces | Done |
+| T16.2 | PRAX-108 | PRAX-24 | Property tests 10k CI + 100k nightly | Done |
+| T16.3 | PRAX-109 | PRAX-24 | 85% coverage maintained | Done |
+| T16.4 | PRAX-110 | PRAX-24 | Nightly conformance suite | Done |
+| T17.1 | PRAX-111 | PRAX-25 | examples/tools/ | Done |
+| T17.2 | PRAX-112 | PRAX-25 | examples/policy/ | Done |
+| T17.3 | PRAX-113 | PRAX-25 | examples/filters/ | Done |
+| T17.4 | PRAX-114 | PRAX-25 | examples/streaming/ | Done |
 
 ## Subtasks — v0.5.0
-| ID | Key | Story | Title |
-|----|-----|-------|-------|
-| T18.1 | PRAX-115 | PRAX-26 | identity.NewEd25519Signer |
-| T18.2 | PRAX-116 | PRAX-26 | JWT with 5+2 claims |
-| T18.3 | PRAX-117 | PRAX-26 | Token lifetime [5s, 300s] |
-| T18.4 | PRAX-118 | PRAX-26 | With* signer options |
-| T18.5 | PRAX-119 | PRAX-26 | internal/jwt stdlib-only |
-| T18.6 | PRAX-120 | PRAX-26 | Identity chaining (parent_token) |
-| T19.1 | PRAX-121 | PRAX-27 | Resolver.Fetch with soft-cancel |
-| T19.2 | PRAX-122 | PRAX-27 | credentials.ZeroBytes |
-| T19.3 | PRAX-123 | PRAX-27 | Credential.Close() with KeepAlive |
-| T20.1 | PRAX-124 | PRAX-28 | Panic recovery on hook/filter sites |
-| T20.2 | PRAX-125 | PRAX-28 | Trust boundary logging levels |
-| T20.3 | PRAX-126 | PRAX-28 | 26 security invariant tests |
-| T21.1 | PRAX-127 | PRAX-29 | slog RedactingHandler |
-| T21.2 | PRAX-128 | PRAX-29 | 10 Prometheus metrics |
-| T21.3 | PRAX-129 | PRAX-29 | FilterDecision to events |
-| T21.4 | PRAX-130 | PRAX-29 | Error-to-event 1:1 mapping |
-| T22.1 | PRAX-131 | PRAX-30 | BudgetExceeded godoc caveat |
-| T22.2 | PRAX-132 | PRAX-30 | Classifier identity rule (errors.As) |
-| T22.3 | PRAX-133 | PRAX-30 | VerdictLog AuditNote |
-| T23.1 | PRAX-134 | PRAX-31 | Orchestrator overhead < 15ms |
-| T23.2 | PRAX-135 | PRAX-31 | State machine 1M transitions/sec |
-| T23.3 | PRAX-136 | PRAX-31 | benchstat in PR CI |
-| T23.4 | PRAX-137 | PRAX-31 | Conformance suite green |
-| T24.1 | PRAX-138 | PRAX-32 | 85% coverage maintained |
-| T24.2 | PRAX-139 | PRAX-32 | All CI jobs operational |
-| T24.3 | PRAX-140 | PRAX-32 | Godoc on every exported symbol |
-| T24.4 | PRAX-141 | PRAX-32 | Integration tests for 14 interfaces |
-| T25.1 | PRAX-142 | PRAX-33 | examples/identity/ |
-| T25.2 | PRAX-143 | PRAX-33 | examples/credentials/ |
+| ID | Key | Story | Title | Wave | Status |
+|----|-----|-------|-------|------|--------|
+| T18.5 | PRAX-119 | PRAX-26 | internal/jwt stdlib-only | 1 | Done |
+| T19.2 | PRAX-122 | PRAX-27 | credentials.ZeroBytes | 1 | Done |
+| T21.1 | PRAX-127 | PRAX-29 | slog RedactingHandler | 1 | Done |
+| T22.3 | PRAX-133 | PRAX-30 | VerdictLog AuditNote | 1 | Done |
+| T18.1 | PRAX-115 | PRAX-26 | identity.NewEd25519Signer | 2 | Done |
+| T19.3 | PRAX-123 | PRAX-27 | Credential.Close() with KeepAlive | 2 | Done |
+| T20.1 | PRAX-124 | PRAX-28 | Panic recovery on hook/filter sites | 2 | Done |
+| T21.2 | PRAX-128 | PRAX-29 | 10 Prometheus metrics | 2 | Done |
+| T18.2 | PRAX-116 | PRAX-26 | JWT with 5+2 claims | 3 | Done |
+| T18.3 | PRAX-117 | PRAX-26 | Token lifetime [5s, 300s] | 3 | Done |
+| T18.4 | PRAX-118 | PRAX-26 | With* signer options | 3 | Done |
+| T19.1 | PRAX-121 | PRAX-27 | Resolver.Fetch with soft-cancel | 3 | Done |
+| T20.2 | PRAX-125 | PRAX-28 | Trust boundary logging levels | 3 | Done |
+| T21.3 | PRAX-129 | PRAX-29 | FilterDecision to events | 3 | Done |
+| T21.4 | PRAX-130 | PRAX-29 | Error-to-event 1:1 mapping | 3 | Done |
+| T18.6 | PRAX-120 | PRAX-26 | Identity chaining (parent_token) | 4 | Done |
+| T23.1 | PRAX-134 | PRAX-31 | Orchestrator overhead < 15ms | 5 | Done |
+| T23.2 | PRAX-135 | PRAX-31 | State machine 1M transitions/sec | 5 | Done |
+| T23.3 | PRAX-136 | PRAX-31 | benchstat in PR CI | 5 | Done |
+| T23.4 | PRAX-137 | PRAX-31 | Conformance suite green | 5 | Done |
+| T20.3 | PRAX-126 | PRAX-28 | 26 security invariant tests | 6 | Done |
+| T24.1 | PRAX-138 | PRAX-32 | 85% coverage maintained | 6 | Done |
+| T24.2 | PRAX-139 | PRAX-32 | All CI jobs operational | 6 | Done |
+| T24.3 | PRAX-140 | PRAX-32 | Godoc on every exported symbol | 6 | Done |
+| T24.4 | PRAX-141 | PRAX-32 | Integration tests for 14 interfaces | 6 | Done |
+| T25.1 | PRAX-142 | PRAX-33 | examples/identity/ | 6 | Done |
+| T25.2 | PRAX-143 | PRAX-33 | examples/credentials/ | 6 | Done |
+| T20.4 | PRAX-155 | PRAX-28 | Activate PhasePreLLMInput in loop | 6 | Done |
+| T20.5 | PRAX-156 | PRAX-28 | Activate PhasePostToolOutput in loop | 6 | Done |
+| T20.6 | PRAX-157 | PRAX-28 | PreToolFilter interface (pre-tool gate) | 6 | Done |
+| T20.7 | PRAX-158 | PRAX-28 | VerdictContinue (post-invocation continuation) | 6 | Done |
+| T22.1 | PRAX-131 | PRAX-30 | BudgetExceeded godoc caveat | skip | Done (pre-existing) |
+| T22.2 | PRAX-132 | PRAX-30 | Classifier identity rule (errors.As) | skip | Done (pre-existing) |
 
 ## Subtasks — v1.0.0
-| ID | Key | Story | Title |
-|----|-----|-------|-------|
+| ID | Key | Story | Title | Status |
+|----|-----|-------|-------|--------|
+| T22.4 | PRAX-159 | PRAX-30 | ToolErrorHandler interface (tool failure hooks) | To Do |
+| T22.5 | PRAX-160 | PRAX-30 | LLMErrorHandler interface (LLM failure hooks) | To Do |
 | T26.1 | PRAX-144 | PRAX-34 | Consumer attestation in release notes |
 | T27.1 | PRAX-145 | PRAX-35 | 14 interfaces frozen-v1.0 |
 | T27.2 | PRAX-146 | PRAX-35 | version.go = 1.0.0 |

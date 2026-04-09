@@ -14,6 +14,45 @@ func TestNullResolver_ImplementsResolver(_ *testing.T) {
 	var _ credentials.Resolver = credentials.NullResolver{}
 }
 
+func TestCredential_Close_ZeroesValue(t *testing.T) {
+	secret := []byte("api-key-secret-1234") //nolint:gosec // G101: test data
+	cred := credentials.Credential{Value: secret}
+	cred.Close()
+
+	// Value must be nil after Close.
+	if cred.Value != nil {
+		t.Error("Value is non-nil after Close()")
+	}
+
+	// Original backing array must be zeroed.
+	for i, b := range secret {
+		if b != 0 {
+			t.Errorf("secret[%d] = 0x%X, want 0x00 (backing array not zeroed)", i, b)
+		}
+	}
+}
+
+func TestCredential_Close_NilValue(t *testing.T) {
+	cred := credentials.Credential{}
+	// Must not panic.
+	cred.Close()
+
+	if cred.Value != nil {
+		t.Error("Value is non-nil after Close() on zero Credential")
+	}
+}
+
+func TestCredential_Close_Idempotent(t *testing.T) {
+	cred := credentials.Credential{Value: []byte("secret")} //nolint:gosec // G101: test data
+	cred.Close()
+	// Second call must not panic.
+	cred.Close()
+
+	if cred.Value != nil {
+		t.Error("Value is non-nil after double Close()")
+	}
+}
+
 func TestNullResolver_Fetch(t *testing.T) {
 	tests := []struct {
 		name        string

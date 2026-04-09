@@ -222,28 +222,29 @@ func TestInvariant_INV04_PreHookVisitedExactlyOnce(t *testing.T) {
 }
 
 // TestInvariant_INV05_LLMCallRequiresInitializingAndPreHook verifies that
-// LLMCall is only reachable from PreHook in the transition table. No other
-// source state has LLMCall as an allowed next state.
+// LLMCall is reachable only from PreHook (initial entry) and PostHook
+// (VerdictContinue re-entry). No other source state has LLMCall as an
+// allowed next state.
 func TestInvariant_INV05_LLMCallPrecedence(t *testing.T) {
+	allowed := map[State]bool{PreHook: true, PostHook: true}
 	inc := incomingEdges()
 	sources := inc[LLMCall]
 
-	if len(sources) != 1 {
-		t.Fatalf("INV-05: LLMCall has %d incoming edges, want exactly 1: incoming = %v", len(sources), sources)
-	}
-	if sources[0] != PreHook {
-		t.Errorf("INV-05: LLMCall's only incoming edge is from %s, want PreHook", sources[0])
+	for _, src := range sources {
+		if !allowed[src] {
+			t.Errorf("INV-05: LLMCall reachable from %s, want only PreHook or PostHook", src)
+		}
 	}
 
-	// Also exhaustively verify: for every state that is not PreHook,
+	// Exhaustively verify: for every state not in allowed set,
 	// LLMCall is not in its allow-list.
 	for _, src := range All() {
-		if src == PreHook {
+		if allowed[src] {
 			continue
 		}
 		for _, dst := range Transitions(src) {
 			if dst == LLMCall {
-				t.Errorf("INV-05: %s has edge to LLMCall but is not PreHook", src)
+				t.Errorf("INV-05: %s has edge to LLMCall but is not PreHook or PostHook", src)
 			}
 		}
 	}
@@ -300,15 +301,19 @@ func TestInvariant_INV06_TerminalStateSetIsExact(t *testing.T) {
 }
 
 // TestInvariant_INV07_ApprovalRequiredSources verifies that ApprovalRequired is
-// reachable only from PreHook or PostHook. No other source state has a legal
-// edge to ApprovalRequired.
+// reachable only from policy-evaluation states: PreHook, PostHook, LLMCall,
+// LLMContinuation, and PostToolFilter. No other source state has a legal edge
+// to ApprovalRequired.
 func TestInvariant_INV07_ApprovalRequiredSources(t *testing.T) {
-	allowed := map[State]bool{PreHook: true, PostHook: true}
+	allowed := map[State]bool{
+		PreHook: true, PostHook: true,
+		LLMCall: true, LLMContinuation: true, PostToolFilter: true,
+	}
 	inc := incomingEdges()
 
 	for _, src := range inc[ApprovalRequired] {
 		if !allowed[src] {
-			t.Errorf("INV-07: ApprovalRequired reachable from %s, want only PreHook or PostHook", src)
+			t.Errorf("INV-07: ApprovalRequired reachable from %s, want only policy-evaluation states", src)
 		}
 	}
 
@@ -320,7 +325,7 @@ func TestInvariant_INV07_ApprovalRequiredSources(t *testing.T) {
 		}
 		for _, dst := range Transitions(src) {
 			if dst == ApprovalRequired {
-				t.Errorf("INV-07: %s→ApprovalRequired edge exists but %s is not PreHook or PostHook", src, src)
+				t.Errorf("INV-07: %s→ApprovalRequired edge exists but %s is not a policy-evaluation state", src, src)
 			}
 		}
 	}

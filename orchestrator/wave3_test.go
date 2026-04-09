@@ -19,6 +19,8 @@ import (
 	"github.com/praxis-os/praxis/tools"
 )
 
+const testModel = "test-model"
+
 // --- PolicyHook tests ---
 
 type verdictHook struct {
@@ -32,7 +34,7 @@ func (h verdictHook) Evaluate(_ context.Context, _ hooks.Phase, _ hooks.PolicyIn
 func TestPolicyHook_Deny(t *testing.T) {
 	p := mock.NewSimple("unreachable")
 	o, _ := orchestrator.New(p,
-		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithDefaultModel(testModel),
 		orchestrator.WithPolicyHook(verdictHook{hooks.Deny("forbidden")}),
 	)
 
@@ -56,7 +58,7 @@ func TestPolicyHook_RequireApproval(t *testing.T) {
 	p := mock.NewSimple("unreachable")
 	meta := map[string]any{"reviewer": "admin"}
 	o, _ := orchestrator.New(p,
-		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithDefaultModel(testModel),
 		orchestrator.WithPolicyHook(verdictHook{hooks.RequireApproval("needs review", meta)}),
 	)
 
@@ -79,7 +81,7 @@ func TestPolicyHook_RequireApproval(t *testing.T) {
 func TestPolicyHook_Log(t *testing.T) {
 	p := mock.NewSimple("hello")
 	o, _ := orchestrator.New(p,
-		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithDefaultModel(testModel),
 		orchestrator.WithPolicyHook(verdictHook{hooks.Log("audit entry")}),
 	)
 
@@ -97,7 +99,7 @@ func TestPolicyHook_Log(t *testing.T) {
 func TestPolicyHook_Allow(t *testing.T) {
 	p := mock.NewSimple("hello")
 	o, _ := orchestrator.New(p,
-		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithDefaultModel(testModel),
 		orchestrator.WithPolicyHook(verdictHook{hooks.Allow()}),
 	)
 
@@ -117,7 +119,7 @@ func TestPolicyHook_Allow(t *testing.T) {
 func TestPolicyHook_Deny_Stream(t *testing.T) {
 	p := mock.NewSimple("unreachable")
 	o, _ := orchestrator.New(p,
-		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithDefaultModel(testModel),
 		orchestrator.WithPolicyHook(verdictHook{hooks.Deny("blocked")}),
 	)
 
@@ -155,7 +157,7 @@ func (redactingPreLLMFilter) Filter(_ context.Context, messages []llm.Message) (
 func TestPreLLMFilter_Block(t *testing.T) {
 	p := mock.NewSimple("unreachable")
 	o, _ := orchestrator.New(p,
-		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithDefaultModel(testModel),
 		orchestrator.WithPreLLMFilter(blockingPreLLMFilter{reason: "toxic content"}),
 	)
 
@@ -173,7 +175,7 @@ func TestPreLLMFilter_Block(t *testing.T) {
 func TestPreLLMFilter_Redact_EmitsPIIEvent(t *testing.T) {
 	p := mock.NewSimple("hello")
 	o, _ := orchestrator.New(p,
-		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithDefaultModel(testModel),
 		orchestrator.WithPreLLMFilter(redactingPreLLMFilter{}),
 	)
 
@@ -216,7 +218,7 @@ func (redactingPostToolFilter) Filter(_ context.Context, result tools.ToolResult
 	modified := result
 	modified.Content = "[REDACTED]"
 	return modified, []hooks.FilterDecision{
-		{Action: hooks.FilterActionRedact, Field: "content", Reason: "sensitive data"},
+		{Action: hooks.FilterActionRedact, Field: "content", Reason: "pii: email address found"},
 	}, nil
 }
 
@@ -232,7 +234,7 @@ func TestPostToolFilter_Block(t *testing.T) {
 	)
 
 	o, _ := orchestrator.New(p,
-		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithDefaultModel(testModel),
 		orchestrator.WithToolInvoker(inv),
 		orchestrator.WithPostToolFilter(blockingPostToolFilter{}),
 	)
@@ -260,7 +262,7 @@ func TestPostToolFilter_Redact(t *testing.T) {
 	)
 
 	o, _ := orchestrator.New(p,
-		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithDefaultModel(testModel),
 		orchestrator.WithToolInvoker(inv),
 		orchestrator.WithPostToolFilter(redactingPostToolFilter{}),
 	)
@@ -295,7 +297,7 @@ func TestSoftCancel_ProducesCancellationKindSoft(t *testing.T) {
 	cancel() // Soft cancel (context.Canceled)
 
 	p := mock.NewSimple("unreachable")
-	o, _ := orchestrator.New(p, orchestrator.WithDefaultModel("test-model"))
+	o, _ := orchestrator.New(p, orchestrator.WithDefaultModel(testModel))
 
 	_, err := o.Invoke(ctx, praxis.InvocationRequest{
 		Messages: userMsg("hi"),
@@ -318,7 +320,7 @@ func TestHardCancel_ProducesCancellationKindHard(t *testing.T) {
 	defer cancel()
 
 	p := mock.NewSimple("unreachable")
-	o, _ := orchestrator.New(p, orchestrator.WithDefaultModel("test-model"))
+	o, _ := orchestrator.New(p, orchestrator.WithDefaultModel(testModel))
 
 	_, err := o.Invoke(ctx, praxis.InvocationRequest{
 		Messages: userMsg("hi"),
@@ -341,7 +343,7 @@ func TestCancel_TerminalEventAlwaysEmitted(t *testing.T) {
 	cancel()
 
 	p := mock.NewSimple("unreachable")
-	o, _ := orchestrator.New(p, orchestrator.WithDefaultModel("test-model"))
+	o, _ := orchestrator.New(p, orchestrator.WithDefaultModel(testModel))
 
 	ch := o.InvokeStream(ctx, praxis.InvocationRequest{
 		Messages: userMsg("hi"),
@@ -377,7 +379,7 @@ func TestPolicyHook_ReceivesCorrectInput(t *testing.T) {
 	var captured hooks.PolicyInput
 	hook := &inputCapturingHook{captured: &captured}
 	o, _ := orchestrator.New(p,
-		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithDefaultModel(testModel),
 		orchestrator.WithPolicyHook(hook),
 	)
 
@@ -390,7 +392,7 @@ func TestPolicyHook_ReceivesCorrectInput(t *testing.T) {
 		t.Fatalf("Invoke: %v", err)
 	}
 
-	if captured.Model != "test-model" {
+	if captured.Model != testModel {
 		t.Errorf("PolicyInput.Model: want test-model, got %q", captured.Model)
 	}
 	if captured.SystemPrompt != "be helpful" {
@@ -398,5 +400,453 @@ func TestPolicyHook_ReceivesCorrectInput(t *testing.T) {
 	}
 	if captured.Metadata["key"] != "value" {
 		t.Errorf("PolicyInput.Metadata[key]: want 'value', got %q", captured.Metadata["key"])
+	}
+}
+
+// --- PhasePreLLMInput tests ---
+
+// phaseCapturingHook captures PolicyInput at a specific phase and allows all others.
+type phaseCapturingHook struct {
+	targetPhase hooks.Phase
+	captured    *hooks.PolicyInput
+	capturedAt  *hooks.Phase
+}
+
+func (h *phaseCapturingHook) Evaluate(_ context.Context, phase hooks.Phase, input hooks.PolicyInput) (hooks.Decision, error) {
+	if phase == h.targetPhase {
+		*h.captured = input
+		if h.capturedAt != nil {
+			*h.capturedAt = phase
+		}
+	}
+	return hooks.Allow(), nil
+}
+
+func TestPolicyHook_PreLLMInput_Invoked(t *testing.T) {
+	p := mock.NewSimple("hello")
+	var captured hooks.PolicyInput
+	hook := &phaseCapturingHook{targetPhase: hooks.PhasePreLLMInput, captured: &captured}
+	o, _ := orchestrator.New(p,
+		orchestrator.WithDefaultModel(testModel),
+		orchestrator.WithPolicyHook(hook),
+	)
+
+	_, err := o.Invoke(context.Background(), praxis.InvocationRequest{
+		Messages:     userMsg("hi"),
+		SystemPrompt: "be helpful",
+		Metadata:     map[string]string{"k": "v"},
+	})
+	if err != nil {
+		t.Fatalf("Invoke: %v", err)
+	}
+
+	if captured.Model != testModel {
+		t.Errorf("PolicyInput.Model: want test-model, got %q", captured.Model)
+	}
+	if captured.SystemPrompt != "be helpful" {
+		t.Errorf("PolicyInput.SystemPrompt: want 'be helpful', got %q", captured.SystemPrompt)
+	}
+	if len(captured.Messages) == 0 {
+		t.Error("PolicyInput.Messages: want non-empty at PhasePreLLMInput")
+	}
+	if captured.Metadata["k"] != "v" {
+		t.Errorf("PolicyInput.Metadata[k]: want 'v', got %q", captured.Metadata["k"])
+	}
+}
+
+func TestPolicyHook_PreLLMInput_Deny(t *testing.T) {
+	p := mock.NewSimple("unreachable")
+	o, _ := orchestrator.New(p,
+		orchestrator.WithDefaultModel(testModel),
+		orchestrator.WithPolicyHook(phaseVerdictHook{
+			phase:   hooks.PhasePreLLMInput,
+			verdict: hooks.Deny("blocked at pre-LLM"),
+		}),
+	)
+
+	result, err := o.Invoke(context.Background(), praxis.InvocationRequest{
+		Messages: userMsg("hi"),
+	})
+	if err == nil {
+		t.Fatal("expected error from PhasePreLLMInput deny")
+	}
+	if result.FinalState != state.Failed {
+		t.Errorf("FinalState: want Failed, got %v", result.FinalState)
+	}
+	// LLM should never have been called.
+	if p.CallCount() != 0 {
+		t.Errorf("CallCount: want 0, got %d", p.CallCount())
+	}
+}
+
+func TestPolicyHook_PreLLMInput_RequireApproval(t *testing.T) {
+	p := mock.NewSimple("unreachable")
+	o, _ := orchestrator.New(p,
+		orchestrator.WithDefaultModel(testModel),
+		orchestrator.WithPolicyHook(phaseVerdictHook{
+			phase:   hooks.PhasePreLLMInput,
+			verdict: hooks.RequireApproval("needs review", nil),
+		}),
+	)
+
+	result, err := o.Invoke(context.Background(), praxis.InvocationRequest{
+		Messages: userMsg("hi"),
+	})
+	if err == nil {
+		t.Fatal("expected error from PhasePreLLMInput require-approval")
+	}
+	if result.FinalState != state.ApprovalRequired {
+		t.Errorf("FinalState: want ApprovalRequired, got %v", result.FinalState)
+	}
+}
+
+// --- PhasePostToolOutput tests ---
+
+func TestPolicyHook_PostToolOutput_Invoked(t *testing.T) {
+	p := mock.New(
+		mock.Response{
+			LLMResponse: llm.LLMResponse{
+				Message: llm.Message{
+					Role: llm.RoleAssistant,
+					Parts: []llm.MessagePart{
+						llm.ToolCallPart(&llm.LLMToolCall{CallID: "c1", Name: "search", ArgumentsJSON: []byte(`{}`)}),
+					},
+				},
+				StopReason: llm.StopReasonToolUse,
+			},
+		},
+		mock.Response{
+			LLMResponse: llm.LLMResponse{
+				Message: llm.Message{
+					Role:  llm.RoleAssistant,
+					Parts: []llm.MessagePart{llm.TextPart("done")},
+				},
+				StopReason: llm.StopReasonEndTurn,
+			},
+		},
+	)
+	var captured hooks.PolicyInput
+	hook := &phaseCapturingHook{targetPhase: hooks.PhasePostToolOutput, captured: &captured}
+	o, _ := orchestrator.New(p,
+		orchestrator.WithDefaultModel(testModel),
+		orchestrator.WithPolicyHook(hook),
+	)
+
+	_, err := o.Invoke(context.Background(), praxis.InvocationRequest{
+		Messages: userMsg("do something"),
+		Metadata: map[string]string{"k": "v"},
+	})
+	if err != nil {
+		t.Fatalf("Invoke: %v", err)
+	}
+
+	if captured.Model != testModel {
+		t.Errorf("PolicyInput.Model: want test-model, got %q", captured.Model)
+	}
+	if captured.ToolResult == nil {
+		t.Error("PolicyInput.ToolResult: want non-nil at PhasePostToolOutput")
+	}
+	if captured.Metadata["k"] != "v" {
+		t.Errorf("PolicyInput.Metadata[k]: want 'v', got %q", captured.Metadata["k"])
+	}
+}
+
+func TestPolicyHook_PostToolOutput_Deny(t *testing.T) {
+	p := mock.New(
+		mock.Response{
+			LLMResponse: llm.LLMResponse{
+				Message: llm.Message{
+					Role: llm.RoleAssistant,
+					Parts: []llm.MessagePart{
+						llm.ToolCallPart(&llm.LLMToolCall{CallID: "c1", Name: "search", ArgumentsJSON: []byte(`{}`)}),
+					},
+				},
+				StopReason: llm.StopReasonToolUse,
+			},
+		},
+	)
+	o, _ := orchestrator.New(p,
+		orchestrator.WithDefaultModel(testModel),
+		orchestrator.WithPolicyHook(phaseVerdictHook{
+			phase:   hooks.PhasePostToolOutput,
+			verdict: hooks.Deny("tool output rejected"),
+		}),
+	)
+
+	result, err := o.Invoke(context.Background(), praxis.InvocationRequest{
+		Messages: userMsg("do something"),
+	})
+	if err == nil {
+		t.Fatal("expected error from PhasePostToolOutput deny")
+	}
+	if result.FinalState != state.Failed {
+		t.Errorf("FinalState: want Failed, got %v", result.FinalState)
+	}
+}
+
+func TestPolicyHook_PostToolOutput_RequireApproval(t *testing.T) {
+	p := mock.New(
+		mock.Response{
+			LLMResponse: llm.LLMResponse{
+				Message: llm.Message{
+					Role: llm.RoleAssistant,
+					Parts: []llm.MessagePart{
+						llm.ToolCallPart(&llm.LLMToolCall{CallID: "c1", Name: "search", ArgumentsJSON: []byte(`{}`)}),
+					},
+				},
+				StopReason: llm.StopReasonToolUse,
+			},
+		},
+	)
+	o, _ := orchestrator.New(p,
+		orchestrator.WithDefaultModel(testModel),
+		orchestrator.WithPolicyHook(phaseVerdictHook{
+			phase:   hooks.PhasePostToolOutput,
+			verdict: hooks.RequireApproval("review tool output", nil),
+		}),
+	)
+
+	result, err := o.Invoke(context.Background(), praxis.InvocationRequest{
+		Messages: userMsg("do something"),
+	})
+	if err == nil {
+		t.Fatal("expected error from PhasePostToolOutput require-approval")
+	}
+	if result.FinalState != state.ApprovalRequired {
+		t.Errorf("FinalState: want ApprovalRequired, got %v", result.FinalState)
+	}
+}
+
+// --- PreToolFilter tests ---
+
+type blockingPreToolFilter struct {
+	reason string
+}
+
+func (f blockingPreToolFilter) Filter(_ context.Context, call tools.ToolCall) (tools.ToolCall, []hooks.FilterDecision, error) {
+	return call, []hooks.FilterDecision{{Action: hooks.FilterActionBlock, Field: "tool_call", Reason: f.reason}}, nil
+}
+
+type modifyingPreToolFilter struct{}
+
+func (modifyingPreToolFilter) Filter(_ context.Context, call tools.ToolCall) (tools.ToolCall, []hooks.FilterDecision, error) {
+	call.ArgumentsJSON = []byte(`{"modified":true}`)
+	return call, []hooks.FilterDecision{{Action: hooks.FilterActionPass, Field: "arguments"}}, nil
+}
+
+func toolCallProvider() *mock.Provider {
+	return mock.New(
+		mock.Response{
+			LLMResponse: llm.LLMResponse{
+				Message: llm.Message{
+					Role: llm.RoleAssistant,
+					Parts: []llm.MessagePart{
+						llm.ToolCallPart(&llm.LLMToolCall{CallID: "c1", Name: "search", ArgumentsJSON: []byte(`{}`)}),
+					},
+				},
+				StopReason: llm.StopReasonToolUse,
+			},
+		},
+		mock.Response{
+			LLMResponse: llm.LLMResponse{
+				Message: llm.Message{
+					Role:  llm.RoleAssistant,
+					Parts: []llm.MessagePart{llm.TextPart("done")},
+				},
+				StopReason: llm.StopReasonEndTurn,
+			},
+		},
+	)
+}
+
+func TestPreToolFilter_PassThrough(t *testing.T) {
+	p := toolCallProvider()
+	o, _ := orchestrator.New(p, orchestrator.WithDefaultModel(testModel))
+
+	result, err := o.Invoke(context.Background(), praxis.InvocationRequest{
+		Messages: userMsg("do something"),
+	})
+	if err != nil {
+		t.Fatalf("Invoke: %v", err)
+	}
+	if result.FinalState != state.Completed {
+		t.Errorf("FinalState: want Completed, got %v", result.FinalState)
+	}
+}
+
+func TestPreToolFilter_Block(t *testing.T) {
+	p := toolCallProvider()
+	o, _ := orchestrator.New(p,
+		orchestrator.WithDefaultModel(testModel),
+		orchestrator.WithPreToolFilter(blockingPreToolFilter{reason: "tool not allowed"}),
+	)
+
+	result, err := o.Invoke(context.Background(), praxis.InvocationRequest{
+		Messages: userMsg("do something"),
+	})
+	if err == nil {
+		t.Fatal("expected error from PreToolFilter block")
+	}
+	if result.FinalState != state.Failed {
+		t.Errorf("FinalState: want Failed, got %v", result.FinalState)
+	}
+}
+
+func TestPreToolFilter_ModifiesInput(t *testing.T) {
+	var capturedCall tools.ToolCall
+	invoker := tools.InvokerFunc(func(_ context.Context, _ tools.InvocationContext, call tools.ToolCall) (tools.ToolResult, error) {
+		capturedCall = call
+		return tools.ToolResult{CallID: call.CallID, Content: "ok", Status: tools.ToolStatusSuccess}, nil
+	})
+
+	p := toolCallProvider()
+	o, _ := orchestrator.New(p,
+		orchestrator.WithDefaultModel(testModel),
+		orchestrator.WithToolInvoker(invoker),
+		orchestrator.WithPreToolFilter(modifyingPreToolFilter{}),
+	)
+
+	_, err := o.Invoke(context.Background(), praxis.InvocationRequest{
+		Messages: userMsg("do something"),
+	})
+	if err != nil {
+		t.Fatalf("Invoke: %v", err)
+	}
+	if string(capturedCall.ArgumentsJSON) != `{"modified":true}` {
+		t.Errorf("ArgumentsJSON: want modified, got %q", string(capturedCall.ArgumentsJSON))
+	}
+}
+
+type panickingPreToolFilter struct{}
+
+func (panickingPreToolFilter) Filter(_ context.Context, _ tools.ToolCall) (tools.ToolCall, []hooks.FilterDecision, error) {
+	panic("boom")
+}
+
+func TestPreToolFilter_PanicRecovery(t *testing.T) {
+	p := toolCallProvider()
+	o, _ := orchestrator.New(p,
+		orchestrator.WithDefaultModel(testModel),
+		orchestrator.WithPreToolFilter(panickingPreToolFilter{}),
+	)
+
+	result, err := o.Invoke(context.Background(), praxis.InvocationRequest{
+		Messages: userMsg("do something"),
+	})
+	if err == nil {
+		t.Fatal("expected error from panicking PreToolFilter")
+	}
+	if result.FinalState != state.Failed {
+		t.Errorf("FinalState: want Failed, got %v", result.FinalState)
+	}
+}
+
+// --- VerdictContinue tests ---
+
+// continueOnceHook returns VerdictContinue on the first PostInvocation call,
+// then VerdictAllow on subsequent calls.
+type continueOnceHook struct {
+	calls int
+}
+
+func (h *continueOnceHook) Evaluate(_ context.Context, phase hooks.Phase, _ hooks.PolicyInput) (hooks.Decision, error) {
+	if phase == hooks.PhasePostInvocation {
+		h.calls++
+		if h.calls == 1 {
+			return hooks.Continue("need one more turn"), nil
+		}
+	}
+	return hooks.Allow(), nil
+}
+
+func TestVerdictContinue_ForcesExtraLLMTurn(t *testing.T) {
+	p := mock.New(
+		mock.Response{
+			LLMResponse: llm.LLMResponse{
+				Message: llm.Message{
+					Role:  llm.RoleAssistant,
+					Parts: []llm.MessagePart{llm.TextPart("first")},
+				},
+				StopReason: llm.StopReasonEndTurn,
+			},
+		},
+		mock.Response{
+			LLMResponse: llm.LLMResponse{
+				Message: llm.Message{
+					Role:  llm.RoleAssistant,
+					Parts: []llm.MessagePart{llm.TextPart("second")},
+				},
+				StopReason: llm.StopReasonEndTurn,
+			},
+		},
+	)
+
+	o, _ := orchestrator.New(p,
+		orchestrator.WithDefaultModel(testModel),
+		orchestrator.WithPolicyHook(&continueOnceHook{}),
+	)
+
+	result, err := o.Invoke(context.Background(), praxis.InvocationRequest{
+		Messages: userMsg("hi"),
+	})
+	if err != nil {
+		t.Fatalf("Invoke: %v", err)
+	}
+	if result.FinalState != state.Completed {
+		t.Errorf("FinalState: want Completed, got %v", result.FinalState)
+	}
+	if p.CallCount() != 2 {
+		t.Errorf("CallCount: want 2, got %d", p.CallCount())
+	}
+}
+
+func TestVerdictContinue_AtOtherPhases_BehavesLikeAllow(t *testing.T) {
+	p := mock.NewSimple("hello")
+	o, _ := orchestrator.New(p,
+		orchestrator.WithDefaultModel(testModel),
+		orchestrator.WithPolicyHook(phaseVerdictHook{
+			phase:   hooks.PhasePreInvocation,
+			verdict: hooks.Continue("should be treated as allow"),
+		}),
+	)
+
+	result, err := o.Invoke(context.Background(), praxis.InvocationRequest{
+		Messages: userMsg("hi"),
+	})
+	if err != nil {
+		t.Fatalf("Invoke: %v", err)
+	}
+	if result.FinalState != state.Completed {
+		t.Errorf("FinalState: want Completed, got %v", result.FinalState)
+	}
+	if p.CallCount() != 1 {
+		t.Errorf("CallCount: want 1, got %d", p.CallCount())
+	}
+}
+
+func TestVerdictContinue_BoundedByMaxTurns(t *testing.T) {
+	alwaysContinue := phaseVerdictHook{
+		phase:   hooks.PhasePostInvocation,
+		verdict: hooks.Continue("always continue"),
+	}
+	// Provide enough responses for maxTurns + extra.
+	p := mock.New(
+		mock.Response{LLMResponse: llm.LLMResponse{Message: llm.Message{Role: llm.RoleAssistant, Parts: []llm.MessagePart{llm.TextPart("r1")}}, StopReason: llm.StopReasonEndTurn}},
+		mock.Response{LLMResponse: llm.LLMResponse{Message: llm.Message{Role: llm.RoleAssistant, Parts: []llm.MessagePart{llm.TextPart("r2")}}, StopReason: llm.StopReasonEndTurn}},
+		mock.Response{LLMResponse: llm.LLMResponse{Message: llm.Message{Role: llm.RoleAssistant, Parts: []llm.MessagePart{llm.TextPart("r3")}}, StopReason: llm.StopReasonEndTurn}},
+		mock.Response{LLMResponse: llm.LLMResponse{Message: llm.Message{Role: llm.RoleAssistant, Parts: []llm.MessagePart{llm.TextPart("r4")}}, StopReason: llm.StopReasonEndTurn}},
+	)
+	o, _ := orchestrator.New(p,
+		orchestrator.WithDefaultModel(testModel),
+		orchestrator.WithMaxTurns(3),
+		orchestrator.WithPolicyHook(alwaysContinue),
+	)
+
+	result, _ := o.Invoke(context.Background(), praxis.InvocationRequest{
+		Messages: userMsg("hi"),
+	})
+	// Max turns exhausted — terminates in Failed.
+	if result.FinalState != state.Failed {
+		t.Errorf("FinalState: want Failed, got %v", result.FinalState)
 	}
 }

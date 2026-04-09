@@ -52,4 +52,32 @@ type InvocationEvent struct {
 
 	// ApprovalSnapshot is populated only for EventTypeApprovalRequired.
 	ApprovalSnapshot *errors.ApprovalSnapshot
+
+	// AuditNote is an optional human-readable annotation attached by policy hooks
+	// or filters to provide audit trail context for this event. It is empty when
+	// no annotation was provided.
+	AuditNote string
+
+	// FilterPhase is the filter chain phase that produced this event.
+	// Non-empty only on EventTypePIIRedacted and EventTypePromptInjectionSuspected.
+	// Values: "pre_llm" (from PreLLMFilter), "post_tool" (from PostToolFilter).
+	FilterPhase string
+
+	// FilterField is the dot-path to the content element acted on.
+	// Non-empty only on content-analysis events.
+	FilterField string
+
+	// FilterReason is the human-readable reason from the FilterDecision.
+	// Non-empty only on content-analysis events.
+	FilterReason string
+
+	// FilterAction is the FilterAction string value from the FilterDecision.
+	// Non-empty only on content-analysis events.
+	FilterAction string
+
+	// EnricherAttributes holds caller-specific attributes from
+	// [telemetry.AttributeEnricher.Enrich], attached to every event after
+	// EventTypeInvocationStarted. Nil when no enricher is configured or
+	// on the first event (InvocationStarted).
+	EnricherAttributes map[string]string
 }

@@ -5,6 +5,7 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/praxis-os/praxis"
 	"github.com/praxis-os/praxis/budget"
@@ -32,10 +33,12 @@ type Orchestrator struct {
 	provider     llm.Provider
 	defaultModel string
 	maxTurns     int
+	logger       *slog.Logger
 
 	toolInvoker        tools.Invoker
 	policyHook         hooks.PolicyHook
 	preLLMFilter       hooks.PreLLMFilter
+	preToolFilter      hooks.PreToolFilter
 	postToolFilter     hooks.PostToolFilter
 	budgetGuard        budget.Guard
 	priceProvider      budget.PriceProvider
@@ -58,6 +61,7 @@ type Orchestrator struct {
 //   - toolInvoker: tools.NullInvoker{}
 //   - policyHook: hooks.AllowAllPolicyHook{}
 //   - preLLMFilter: hooks.PassThroughPreLLMFilter{}
+//   - preToolFilter: hooks.PassThroughPreToolFilter{}
 //   - postToolFilter: hooks.PassThroughPostToolFilter{}
 //   - budgetGuard: budget.NullGuard{}
 //   - priceProvider: budget.NullPriceProvider{}
@@ -66,6 +70,7 @@ type Orchestrator struct {
 //   - credentialResolver: credentials.NullResolver{}
 //   - identitySigner: identity.NullSigner{}
 //   - classifier: errors.DefaultClassifier{}
+//   - logger: slog.Default()
 func New(provider llm.Provider, opts ...Option) (*Orchestrator, error) {
 	if provider == nil {
 		return nil, fmt.Errorf("orchestrator: provider must not be nil")
@@ -74,9 +79,11 @@ func New(provider llm.Provider, opts ...Option) (*Orchestrator, error) {
 	o := &Orchestrator{
 		provider:           provider,
 		maxTurns:           defaultMaxTurns,
+		logger:             slog.Default(),
 		toolInvoker:        tools.NullInvoker{},
 		policyHook:         hooks.AllowAllPolicyHook{},
 		preLLMFilter:       hooks.PassThroughPreLLMFilter{},
+		preToolFilter:      hooks.PassThroughPreToolFilter{},
 		postToolFilter:     hooks.PassThroughPostToolFilter{},
 		budgetGuard:        budget.NullGuard{},
 		priceProvider:      budget.NullPriceProvider{},

@@ -51,8 +51,6 @@ type NullEmitter struct{}
 // Emit discards the event without side effects and returns nil.
 func (NullEmitter) Emit(_ context.Context, _ event.InvocationEvent) error { return nil }
 
-
-
 // NullEnricher is an [AttributeEnricher] that returns an empty map.
 // Used as the default when no enrichment is configured.
 type NullEnricher struct{}

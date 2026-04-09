@@ -10,13 +10,27 @@ import (
 // Credential holds resolved credential material returned by a [Resolver].
 //
 // Callers must treat the Value slice as immutable and must not retain
-// references beyond the scope of the call that received it. Implementations
-// that wish to enforce zero-on-close semantics should overwrite Value before
-// releasing the backing memory.
+// references beyond the scope of the call that received it.
+//
+// Close must be called when the credential is no longer needed. It zeroes
+// the backing memory to prevent secret material from lingering on the heap.
 type Credential struct {
 	// Value holds the raw credential bytes (e.g., an API key, bearer token,
 	// or PEM-encoded certificate).
 	Value []byte
+}
+
+// Close zeroes all credential material and releases the reference to the
+// backing array. After Close returns, Value is nil and the original bytes
+// have been overwritten with zeros.
+//
+// Close uses [ZeroBytes] internally, which includes a [runtime.KeepAlive]
+// fence to prevent the compiler from eliding the zeroing writes.
+//
+// Close is safe to call multiple times; subsequent calls are no-ops.
+func (c *Credential) Close() {
+	ZeroBytes(c.Value)
+	c.Value = nil
 }
 
 // Resolver fetches named credentials at invocation time.

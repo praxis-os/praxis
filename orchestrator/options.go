@@ -4,6 +4,7 @@ package orchestrator
 
 import (
 	"fmt"
+	"log/slog"
 
 	"github.com/praxis-os/praxis/budget"
 	"github.com/praxis-os/praxis/credentials"
@@ -91,6 +92,18 @@ func WithPreLLMFilter(f hooks.PreLLMFilter) Option {
 	}
 }
 
+// WithPreToolFilter sets the [hooks.PreToolFilter] applied to each tool call
+// before it is dispatched to the invoker. Passing nil returns an error.
+func WithPreToolFilter(f hooks.PreToolFilter) Option {
+	return func(o *Orchestrator) error {
+		if f == nil {
+			return fmt.Errorf("orchestrator: WithPreToolFilter must not be nil")
+		}
+		o.preToolFilter = f
+		return nil
+	}
+}
+
 // WithPostToolFilter sets the [hooks.PostToolFilter] applied to each tool
 // result before it is included in the next LLM turn. Passing nil returns an error.
 func WithPostToolFilter(f hooks.PostToolFilter) Option {
@@ -151,8 +164,13 @@ func WithAttributeEnricher(e telemetry.AttributeEnricher) Option {
 	}
 }
 
-// WithCredentialResolver sets the [credentials.Resolver] used to fetch named
-// credentials at invocation time. Passing nil returns an error.
+// WithCredentialResolver sets the [credentials.Resolver] available for
+// credential fetching during invocations. Passing nil returns an error.
+//
+// Note: the orchestrator does not call Fetch automatically because tool
+// definitions do not carry credential metadata. Consumer [tools.Invoker]
+// implementations should call Fetch from within their Invoke method,
+// using [tools.InvocationContext.SignedIdentity] for authentication context.
 func WithCredentialResolver(r credentials.Resolver) Option {
 	return func(o *Orchestrator) error {
 		if r == nil {
@@ -171,6 +189,18 @@ func WithIdentitySigner(s identity.Signer) Option {
 			return fmt.Errorf("orchestrator: WithIdentitySigner must not be nil")
 		}
 		o.identitySigner = s
+		return nil
+	}
+}
+
+// WithLogger sets the [*slog.Logger] used for trust-boundary and diagnostic
+// logging. Passing nil returns an error. Default: [slog.Default].
+func WithLogger(l *slog.Logger) Option {
+	return func(o *Orchestrator) error {
+		if l == nil {
+			return fmt.Errorf("orchestrator: WithLogger must not be nil")
+		}
+		o.logger = l
 		return nil
 	}
 }
