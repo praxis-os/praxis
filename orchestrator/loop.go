@@ -4,6 +4,7 @@ package orchestrator
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"log/slog"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/praxis-os/praxis/errors"
 	"github.com/praxis-os/praxis/event"
 	"github.com/praxis-os/praxis/hooks"
+	"github.com/praxis-os/praxis/internal/jwt"
 	"github.com/praxis-os/praxis/llm"
 	"github.com/praxis-os/praxis/state"
 	"github.com/praxis-os/praxis/telemetry"
@@ -21,6 +23,13 @@ import (
 
 // gracePeriod is the soft-cancel grace window (D21).
 const gracePeriod = 500 * time.Millisecond
+
+// generateInvocationID returns a random hex invocation identifier.
+func generateInvocationID() string {
+	var b [16]byte
+	_, _ = rand.Read(b[:])
+	return fmt.Sprintf("inv-%x", b[:])
+}
 
 // eventSink abstracts where lifecycle events are delivered.
 type eventSink func(ctx context.Context, e event.InvocationEvent)
@@ -32,7 +41,7 @@ func (o *Orchestrator) runLoop(
 	model string,
 	maxTurns int,
 	sink eventSink,
-) *praxis.InvocationResult {
+) (result *praxis.InvocationResult) {
 	machine := state.NewMachine()
 	now := time.Now
 
@@ -48,11 +57,35 @@ func (o *Orchestrator) runLoop(
 		bg.Start(time.Now())
 	}
 
+	// Generate invocation ID and track signed identity for result enrichment.
+	// The deferred func sets these on every result regardless of exit path.
+	invocationID := generateInvocationID()
+	var signedIdentity string
+	defer func() {
+		if result != nil {
+			result.InvocationID = invocationID
+			result.SignedIdentity = signedIdentity
+		}
+	}()
+
 	// Step 1: Created → Initializing
 	if err := machine.Transition(state.Initializing); err != nil {
 		return o.failLoop(ctx, machine, sink, errors.NewSystemError("transition to Initializing failed", err))
 	}
 	emit(event.EventTypeInvocationStarted, state.Initializing)
+
+	// Sign identity token at Initializing (D73). Claims include the
+	// invocation ID and, for nested orchestrators, the parent token (D75).
+	signClaims := map[string]any{
+		jwt.ClaimInvocationID: invocationID,
+	}
+	if req.ParentToken != "" {
+		signClaims[jwt.ClaimParentToken] = req.ParentToken
+	}
+	signedIdentity, signErr := o.identitySigner.Sign(ctx, signClaims)
+	if signErr != nil {
+		return o.failLoop(ctx, machine, sink, errors.NewSystemError("identity signing failed", signErr))
+	}
 
 	// Step 2: Initializing → PreHook
 	if err := machine.Transition(state.PreHook); err != nil {
@@ -94,7 +127,7 @@ func (o *Orchestrator) runLoop(
 		}
 
 		var result *praxis.InvocationResult
-		messages, iterations, result = o.runIteration(ctx, req, model, messages, iterations, machine, sink, emit, emitTerminal)
+		messages, iterations, result = o.runIteration(ctx, req, model, messages, iterations, machine, sink, emit, emitTerminal, invocationID, signedIdentity)
 		if result != nil {
 			return result
 		}
@@ -119,6 +152,8 @@ func (o *Orchestrator) runIteration(
 	sink eventSink,
 	emit func(event.EventType, state.State),
 	emitTerminal func(event.EventType, state.State, error),
+	invocationID string,
+	signedIdentity string,
 ) ([]llm.Message, int, *praxis.InvocationResult) {
 	emit(event.EventTypeLLMCallStarted, machine.State())
 
@@ -167,7 +202,7 @@ func (o *Orchestrator) runIteration(
 	messages = append(messages, resp.Message)
 
 	if resp.StopReason == llm.StopReasonToolUse {
-		toolResultMsg, toolErr := o.handleToolCallsWithEvents(ctx, resp.Message, machine, sink)
+		toolResultMsg, toolErr := o.handleToolCallsWithEvents(ctx, resp.Message, machine, sink, invocationID, signedIdentity)
 		if toolErr != nil {
 			_ = machine.Transition(state.Failed)
 			emitTerminal(event.EventTypeInvocationFailed, state.Failed, toolErr)
@@ -440,10 +475,15 @@ func (o *Orchestrator) handleToolCallsWithEvents(
 	msg llm.Message,
 	machine *state.Machine,
 	sink eventSink,
+	invocationID string,
+	signedIdentity string,
 ) (llm.Message, error) {
 	var resultParts []llm.MessagePart
 	var toolResults []tools.ToolResult
-	ictx := tools.InvocationContext{}
+	ictx := tools.InvocationContext{
+		InvocationID:  invocationID,
+		SignedIdentity: signedIdentity,
+	}
 
 	var toolCalls []tools.ToolCall
 	for _, part := range msg.Parts {

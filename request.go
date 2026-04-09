@@ -41,4 +41,14 @@ type InvocationRequest struct {
 	// loops) for this invocation. Optional; zero means use the orchestrator's
 	// configured default.
 	MaxTurns int
+
+	// ParentToken is the signed identity token from the outer (parent)
+	// invocation, used for identity chaining (D75). When a nested
+	// orchestrator is invoked from within a tool, the outer invocation's
+	// SignedIdentity should be passed here so the inner token includes a
+	// praxis.parent_token claim linking child to parent.
+	//
+	// Optional; empty means no parent token (root invocation).
+	// Chain depth is documented at max 3 levels but not enforced.
+	ParentToken string
 }
