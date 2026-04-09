@@ -125,20 +125,32 @@ type Claims struct {
 // Encode signs claims with key and returns a compact JWT string of the form
 // "base64url(header).base64url(payload).base64url(signature)".
 //
-// The algorithm is always EdDSA (Ed25519) and the header is always
-// {"alg":"EdDSA","typ":"JWT"}.
+// The algorithm is always EdDSA (Ed25519). The header contains
+// {"alg":"EdDSA","typ":"JWT"} and, if keyID is non-empty, a "kid" field
+// for verifier key selection (per D74).
 //
 // An error is returned if JSON marshalling of the payload fails or if
 // ed25519.Sign returns an error (the latter is only possible with a malformed
 // key).
-func Encode(claims Claims, key ed25519.PrivateKey) (string, error) {
+func Encode(claims Claims, key ed25519.PrivateKey, keyID string) (string, error) {
 	payload, err := marshalPayload(claims)
 	if err != nil {
 		return "", fmt.Errorf("jwt: marshal payload: %w", err)
 	}
 
 	encodedPayload := base64url(payload)
-	signingInput := fixedHeader + "." + encodedPayload
+
+	header := fixedHeader
+	if keyID != "" {
+		h := map[string]string{"alg": "EdDSA", "typ": "JWT", "kid": keyID}
+		raw, err := json.Marshal(h)
+		if err != nil {
+			return "", fmt.Errorf("jwt: marshal header: %w", err)
+		}
+		header = base64url(raw)
+	}
+
+	signingInput := header + "." + encodedPayload
 
 	// Ed25519 requires crypto.Hash(0) (no pre-hashing). rand is ignored by
 	// the ed25519 implementation and may be nil.

@@ -456,6 +456,173 @@ func TestEd25519Signer_DifferentKeysProduceDifferentTokens(t *testing.T) {
 	}
 }
 
+func TestWithIssuer(t *testing.T) {
+	_, priv := generateTestKey(t)
+	signer, err := identity.NewEd25519Signer(priv, identity.WithIssuer("my-service"))
+	if err != nil {
+		t.Fatalf("NewEd25519Signer: %v", err)
+	}
+
+	token, _ := signer.Sign(context.Background(), nil)
+	payload := decodePayload(t, token)
+
+	if got := payload[jwt.ClaimIssuer]; got != "my-service" {
+		t.Errorf("iss = %v, want %q", got, "my-service")
+	}
+}
+
+func TestWithTokenLifetime(t *testing.T) {
+	_, priv := generateTestKey(t)
+	signer, err := identity.NewEd25519Signer(priv, identity.WithTokenLifetime(30*time.Second))
+	if err != nil {
+		t.Fatalf("NewEd25519Signer: %v", err)
+	}
+
+	token, _ := signer.Sign(context.Background(), nil)
+	payload := decodePayload(t, token)
+
+	iat := payload[jwt.ClaimIssuedAt].(float64)
+	exp := payload[jwt.ClaimExpiration].(float64)
+	if diff := exp - iat; diff != 30 {
+		t.Errorf("exp - iat = %v, want 30", diff)
+	}
+}
+
+func TestWithTokenLifetime_BelowMinReturnsError(t *testing.T) {
+	_, priv := generateTestKey(t)
+	_, err := identity.NewEd25519Signer(priv, identity.WithTokenLifetime(2*time.Second))
+	if err == nil {
+		t.Fatal("expected error for lifetime below minimum")
+	}
+	if !strings.Contains(err.Error(), "below minimum") {
+		t.Errorf("error = %q, want mention of minimum", err)
+	}
+}
+
+func TestWithTokenLifetime_AboveMaxReturnsError(t *testing.T) {
+	_, priv := generateTestKey(t)
+	_, err := identity.NewEd25519Signer(priv, identity.WithTokenLifetime(10*time.Minute))
+	if err == nil {
+		t.Fatal("expected error for lifetime above maximum")
+	}
+	if !strings.Contains(err.Error(), "exceeds maximum") {
+		t.Errorf("error = %q, want mention of maximum", err)
+	}
+}
+
+func TestWithTokenLifetime_BoundaryValues(t *testing.T) {
+	_, priv := generateTestKey(t)
+
+	// Exact minimum should succeed.
+	if _, err := identity.NewEd25519Signer(priv, identity.WithTokenLifetime(identity.MinTokenLifetime)); err != nil {
+		t.Errorf("MinTokenLifetime rejected: %v", err)
+	}
+
+	// Exact maximum should succeed.
+	if _, err := identity.NewEd25519Signer(priv, identity.WithTokenLifetime(identity.MaxTokenLifetime)); err != nil {
+		t.Errorf("MaxTokenLifetime rejected: %v", err)
+	}
+}
+
+func TestWithKeyID(t *testing.T) {
+	_, priv := generateTestKey(t)
+	signer, err := identity.NewEd25519Signer(priv, identity.WithKeyID("key-2024-01"))
+	if err != nil {
+		t.Fatalf("NewEd25519Signer: %v", err)
+	}
+
+	token, _ := signer.Sign(context.Background(), nil)
+
+	// Decode header to check kid.
+	parts := strings.Split(token, ".")
+	rawHeader, err := base64.RawURLEncoding.DecodeString(parts[0])
+	if err != nil {
+		t.Fatalf("decode header: %v", err)
+	}
+	var header map[string]any
+	if err := json.Unmarshal(rawHeader, &header); err != nil {
+		t.Fatalf("unmarshal header: %v", err)
+	}
+
+	if got := header["kid"]; got != "key-2024-01" {
+		t.Errorf("kid = %v, want %q", got, "key-2024-01")
+	}
+	if got := header["alg"]; got != "EdDSA" {
+		t.Errorf("alg = %v, want %q", got, "EdDSA")
+	}
+	if got := header["typ"]; got != "JWT" {
+		t.Errorf("typ = %v, want %q", got, "JWT")
+	}
+}
+
+func TestWithKeyID_Empty_NoKidInHeader(t *testing.T) {
+	_, priv := generateTestKey(t)
+	signer, _ := identity.NewEd25519Signer(priv)
+
+	token, _ := signer.Sign(context.Background(), nil)
+
+	parts := strings.Split(token, ".")
+	rawHeader, _ := base64.RawURLEncoding.DecodeString(parts[0])
+	var header map[string]any
+	json.Unmarshal(rawHeader, &header)
+
+	if _, ok := header["kid"]; ok {
+		t.Error("kid present in header without WithKeyID")
+	}
+}
+
+func TestWithExtraClaims(t *testing.T) {
+	_, priv := generateTestKey(t)
+	signer, err := identity.NewEd25519Signer(priv, identity.WithExtraClaims(map[string]any{
+		"env":     "production",
+		"team.id": "platform",
+	}))
+	if err != nil {
+		t.Fatalf("NewEd25519Signer: %v", err)
+	}
+
+	token, _ := signer.Sign(context.Background(), nil)
+	payload := decodePayload(t, token)
+
+	if got := payload["env"]; got != "production" {
+		t.Errorf("env = %v, want %q", got, "production")
+	}
+	if got := payload["team.id"]; got != "platform" {
+		t.Errorf("team.id = %v, want %q", got, "platform")
+	}
+}
+
+func TestWithExtraClaims_ShallowCopy(t *testing.T) {
+	_, priv := generateTestKey(t)
+	original := map[string]any{"key": "original"}
+	signer, _ := identity.NewEd25519Signer(priv, identity.WithExtraClaims(original))
+
+	// Mutate original after construction.
+	original["key"] = "mutated"
+
+	token, _ := signer.Sign(context.Background(), nil)
+	payload := decodePayload(t, token)
+
+	if got := payload["key"]; got != "original" {
+		t.Errorf("key = %v, want %q (should be shallow-copied)", got, "original")
+	}
+}
+
+func TestWithExtraClaims_MandatoryClaimsWin(t *testing.T) {
+	_, priv := generateTestKey(t)
+	signer, _ := identity.NewEd25519Signer(priv, identity.WithExtraClaims(map[string]any{
+		jwt.ClaimIssuer: "evil",
+	}))
+
+	token, _ := signer.Sign(context.Background(), nil)
+	payload := decodePayload(t, token)
+
+	// Mandatory iss must win over extra claims.
+	if got := payload[jwt.ClaimIssuer]; got != "praxis" {
+		t.Errorf("iss = %v, want %q (mandatory must win)", got, "praxis")
+	}
+}
+
 func BenchmarkEd25519Signer_Sign(b *testing.B) {
 	_, priv, err := ed25519.GenerateKey(nil)
 	if err != nil {

@@ -16,6 +16,61 @@ import (
 // SignerOption configures an [Ed25519Signer] created by [NewEd25519Signer].
 type SignerOption func(*ed25519Signer) error
 
+// WithIssuer overrides the default "praxis" issuer claim (iss) in tokens
+// produced by the signer. Production callers should set a meaningful issuer
+// (e.g., service name or environment identifier).
+func WithIssuer(iss string) SignerOption {
+	return func(s *ed25519Signer) error {
+		s.issuer = iss
+		return nil
+	}
+}
+
+// WithTokenLifetime sets the duration for which each signed token is valid.
+// The lifetime is measured from the time of the Sign call (iat) to
+// expiration (exp = iat + lifetime).
+//
+// Default: 60 seconds. Minimum: 5 seconds. Maximum: 300 seconds.
+// Out-of-range values are rejected with an error.
+func WithTokenLifetime(d time.Duration) SignerOption {
+	return func(s *ed25519Signer) error {
+		if err := validateTokenLifetime(d); err != nil {
+			return err
+		}
+		s.tokenLifetime = d
+		return nil
+	}
+}
+
+// WithKeyID sets the "kid" (key ID) JOSE header field on tokens produced
+// by the signer (per D74). Verifiers use kid to select the correct public
+// key when multiple keys are in rotation.
+func WithKeyID(kid string) SignerOption {
+	return func(s *ed25519Signer) error {
+		s.keyID = kid
+		return nil
+	}
+}
+
+// WithExtraClaims adds caller-defined claims to every token produced by the
+// signer. Claims are merged into the payload before signing.
+//
+// If a caller claim key collides with a mandatory registered or custom
+// claim key (e.g., "iss", "sub", "praxis.invocation_id"), the mandatory
+// claim wins and the caller claim for that key is silently dropped.
+//
+// The claims map is shallow-copied at construction time; mutations to the
+// original map after calling WithExtraClaims have no effect.
+func WithExtraClaims(claims map[string]any) SignerOption {
+	return func(s *ed25519Signer) error {
+		s.extraClaims = make(map[string]any, len(claims))
+		for k, v := range claims {
+			s.extraClaims[k] = v
+		}
+		return nil
+	}
+}
+
 // ed25519Signer implements Signer using Ed25519-signed JWTs.
 type ed25519Signer struct {
 	key           ed25519.PrivateKey
@@ -154,7 +209,7 @@ func (s *ed25519Signer) Sign(_ context.Context, claims map[string]any) (string, 
 		Extra:        extra,
 	}
 
-	return jwt.Encode(jwtClaims, s.key)
+	return jwt.Encode(jwtClaims, s.key, s.keyID)
 }
 
 // validateTokenLifetime checks that d is within [MinTokenLifetime, MaxTokenLifetime].

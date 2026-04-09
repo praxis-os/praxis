@@ -57,7 +57,7 @@ func generateKey(t *testing.T) (ed25519.PublicKey, ed25519.PrivateKey) {
 func TestEncode_Header(t *testing.T) {
 	_, priv := generateKey(t)
 
-	token, err := Encode(Claims{Issuer: "test"}, priv)
+	token, err := Encode(Claims{Issuer: "test"}, priv, "")
 	if err != nil {
 		t.Fatalf("Encode: %v", err)
 	}
@@ -75,14 +75,40 @@ func TestEncode_Header(t *testing.T) {
 	}
 }
 
+// TestEncode_HeaderWithKeyID verifies that a non-empty keyID adds a "kid"
+// field to the JOSE header.
+func TestEncode_HeaderWithKeyID(t *testing.T) {
+	_, priv := generateKey(t)
+
+	token, err := Encode(Claims{Issuer: "test"}, priv, "my-key-id")
+	if err != nil {
+		t.Fatalf("Encode: %v", err)
+	}
+
+	header, _ := decodeToken(t, token)
+
+	if got := header["alg"]; got != "EdDSA" {
+		t.Errorf("alg = %q, want %q", got, "EdDSA")
+	}
+	if got := header["typ"]; got != "JWT" {
+		t.Errorf("typ = %q, want %q", got, "JWT")
+	}
+	if got := header["kid"]; got != "my-key-id" {
+		t.Errorf("kid = %q, want %q", got, "my-key-id")
+	}
+	if len(header) != 3 {
+		t.Errorf("header has %d keys, want exactly 3", len(header))
+	}
+}
+
 // TestEncode_FixedHeaderReused verifies that consecutive calls produce the
 // same base64url header segment — confirming the pre-encoded fixedHeader is
 // stable.
 func TestEncode_FixedHeaderReused(t *testing.T) {
 	_, priv := generateKey(t)
 
-	token1, _ := Encode(Claims{Issuer: "a"}, priv)
-	token2, _ := Encode(Claims{Issuer: "b"}, priv)
+	token1, _ := Encode(Claims{Issuer: "a"}, priv, "")
+	token2, _ := Encode(Claims{Issuer: "b"}, priv, "")
 
 	h1 := strings.Split(token1, ".")[0]
 	h2 := strings.Split(token2, ".")[0]
@@ -102,7 +128,7 @@ func TestEncode_SignatureVerification(t *testing.T) {
 		Subject:      "inv-001",
 		InvocationID: "inv-001",
 	}
-	token, err := Encode(claims, priv)
+	token, err := Encode(claims, priv, "")
 	if err != nil {
 		t.Fatalf("Encode: %v", err)
 	}
@@ -136,7 +162,7 @@ func TestEncode_RegisteredClaims(t *testing.T) {
 		Expiration: exp,
 	}
 
-	token, err := Encode(claims, priv)
+	token, err := Encode(claims, priv, "")
 	if err != nil {
 		t.Fatalf("Encode: %v", err)
 	}
@@ -174,7 +200,7 @@ func TestEncode_MultiAudience(t *testing.T) {
 	_, priv := generateKey(t)
 
 	claims := Claims{Audience: []string{"svc-a", "svc-b", "svc-c"}}
-	token, err := Encode(claims, priv)
+	token, err := Encode(claims, priv, "")
 	if err != nil {
 		t.Fatalf("Encode: %v", err)
 	}
@@ -212,7 +238,7 @@ func TestEncode_PraxisClaims(t *testing.T) {
 		ToolName:     "tools.Search",
 		ParentToken:  "parent.jwt.token",
 	}
-	token, err := Encode(claims, priv)
+	token, err := Encode(claims, priv, "")
 	if err != nil {
 		t.Fatalf("Encode: %v", err)
 	}
@@ -243,7 +269,7 @@ func TestEncode_ExtraClaimsMerged(t *testing.T) {
 		},
 	}
 
-	token, err := Encode(claims, priv)
+	token, err := Encode(claims, priv, "")
 	if err != nil {
 		t.Fatalf("Encode: %v", err)
 	}
@@ -263,7 +289,7 @@ func TestEncode_ExtraClaimsMerged(t *testing.T) {
 func TestEncode_EmptyClaims(t *testing.T) {
 	_, priv := generateKey(t)
 
-	token, err := Encode(Claims{}, priv)
+	token, err := Encode(Claims{}, priv, "")
 	if err != nil {
 		t.Fatalf("Encode with empty claims: %v", err)
 	}
@@ -286,7 +312,7 @@ func TestEncode_OmitsZeroTimeFields(t *testing.T) {
 	_, priv := generateKey(t)
 
 	claims := Claims{Issuer: "test"} // Expiration and IssuedAt are zero
-	token, err := Encode(claims, priv)
+	token, err := Encode(claims, priv, "")
 	if err != nil {
 		t.Fatalf("Encode: %v", err)
 	}
@@ -309,7 +335,7 @@ func TestEncode_OmitsEmptyStringFields(t *testing.T) {
 	claims := Claims{
 		IssuedAt: time.Unix(1700000000, 0), // one non-empty field to confirm payload is non-trivial
 	}
-	token, err := Encode(claims, priv)
+	token, err := Encode(claims, priv, "")
 	if err != nil {
 		t.Fatalf("Encode: %v", err)
 	}
@@ -328,7 +354,7 @@ func TestEncode_OmitsEmptyStringFields(t *testing.T) {
 func TestEncode_NoPadding(t *testing.T) {
 	_, priv := generateKey(t)
 
-	token, err := Encode(Claims{Issuer: "praxis", Subject: "test"}, priv)
+	token, err := Encode(Claims{Issuer: "praxis", Subject: "test"}, priv, "")
 	if err != nil {
 		t.Fatalf("Encode: %v", err)
 	}
@@ -347,11 +373,11 @@ func TestEncode_DifferentKeysProduceDifferentSignatures(t *testing.T) {
 
 	claims := Claims{Issuer: "same", Subject: "same"}
 
-	t1, err := Encode(claims, priv1)
+	t1, err := Encode(claims, priv1, "")
 	if err != nil {
 		t.Fatalf("Encode key1: %v", err)
 	}
-	t2, err := Encode(claims, priv2)
+	t2, err := Encode(claims, priv2, "")
 	if err != nil {
 		t.Fatalf("Encode key2: %v", err)
 	}
@@ -370,7 +396,7 @@ func TestEncode_SignatureInvalidWithWrongKey(t *testing.T) {
 	_, priv := generateKey(t)
 	wrongPub, _ := generateKey(t)
 
-	token, err := Encode(Claims{Issuer: "praxis"}, priv)
+	token, err := Encode(Claims{Issuer: "praxis"}, priv, "")
 	if err != nil {
 		t.Fatalf("Encode: %v", err)
 	}
@@ -441,7 +467,7 @@ func BenchmarkEncode(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		if _, err := Encode(claims, priv); err != nil {
+		if _, err := Encode(claims, priv, ""); err != nil {
 			b.Fatalf("Encode: %v", err)
 		}
 	}
