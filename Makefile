@@ -26,9 +26,9 @@ fmt:
 bench:
 	go test -bench=. -benchmem -count=5 ./...
 
-# Generate coverage report
+# Generate coverage report (excludes examples/, matches CI threshold)
 cover:
-	go test -race -coverprofile=coverage.out ./...
+	go test -race -coverprofile=coverage.out $$(go list ./... | grep -v /examples/)
 	go tool cover -func=coverage.out
 
 # Check for banned identifiers (decoupling contract enforcement)

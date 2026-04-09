@@ -149,7 +149,7 @@
 | T23.2 | PRAX-135 | PRAX-31 | State machine 1M transitions/sec | 5 | Done |
 | T23.3 | PRAX-136 | PRAX-31 | benchstat in PR CI | 5 | Done |
 | T23.4 | PRAX-137 | PRAX-31 | Conformance suite green | 5 | Done |
-| T20.3 | PRAX-126 | PRAX-28 | 26 security invariant tests | 6 | To Do |
+| T20.3 | PRAX-126 | PRAX-28 | 26 security invariant tests | 6 | Done |
 | T24.1 | PRAX-138 | PRAX-32 | 85% coverage maintained | 6 | To Do |
 | T24.2 | PRAX-139 | PRAX-32 | All CI jobs operational | 6 | To Do |
 | T24.3 | PRAX-140 | PRAX-32 | Godoc on every exported symbol | 6 | To Do |
