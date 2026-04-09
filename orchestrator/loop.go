@@ -9,6 +9,8 @@ import (
 	"log/slog"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/praxis-os/praxis"
 	"github.com/praxis-os/praxis/budget"
 	"github.com/praxis-os/praxis/errors"
@@ -522,6 +524,11 @@ func (o *Orchestrator) completeLoop(
 // and post-tool filter chain. Returns the assembled tool-result message,
 // the last filtered tool result (for PhasePostToolOutput policy input),
 // and any error.
+//
+// When the provider advertises SupportsParallelToolCalls and there are
+// multiple tool calls, tool invocations run concurrently via errgroup (D24).
+// Event emission and filter chains remain on the loop goroutine
+// (sole-producer rule).
 func (o *Orchestrator) handleToolCallsWithEvents( //nolint:gocyclo // tool dispatch with filter chains is inherently complex
 	ctx context.Context,
 	msg llm.Message,
@@ -531,10 +538,9 @@ func (o *Orchestrator) handleToolCallsWithEvents( //nolint:gocyclo // tool dispa
 	signedIdentity string,
 ) (llm.Message, *tools.ToolResult, error) {
 	var resultParts []llm.MessagePart
-	var toolResults []tools.ToolResult
 	var lastToolResult *tools.ToolResult
 	ictx := tools.InvocationContext{
-		InvocationID:  invocationID,
+		InvocationID:   invocationID,
 		SignedIdentity: signedIdentity,
 	}
 
@@ -560,8 +566,9 @@ func (o *Orchestrator) handleToolCallsWithEvents( //nolint:gocyclo // tool dispa
 		return llm.Message{}, nil, errors.NewSystemError("transition to ToolCall failed", err)
 	}
 
-	for _, call := range toolCalls {
-		// Pre-tool filter: inspect/modify/block before execution.
+	// Phase 1: Run pre-tool filters sequentially for all calls.
+	// Filters may mutate call or block, so they must run before dispatch.
+	for i, call := range toolCalls {
 		var preToolDecisions []hooks.FilterDecision
 		var preToolErr error
 		func() {
@@ -597,29 +604,64 @@ func (o *Orchestrator) handleToolCallsWithEvents( //nolint:gocyclo // tool dispa
 				return llm.Message{}, nil, errors.NewPolicyDeniedError("pre_tool_input", d.Reason)
 			}
 		}
+		toolCalls[i] = call // persist filter mutations
+	}
 
+	// Phase 2: Emit all ToolCallStarted events and record budget before dispatch.
+	for _, call := range toolCalls {
 		sink(ctx, event.InvocationEvent{
 			Type: event.EventTypeToolCallStarted, State: state.ToolCall,
 			At: time.Now(), ToolCallID: call.CallID, ToolName: call.Name,
 		})
-
 		_ = o.budgetGuard.RecordToolCall(ctx)
+	}
 
-		result, err := o.toolInvoker.Invoke(ctx, ictx, call)
+	// Phase 3: Dispatch tool invocations.
+	toolResults := make([]tools.ToolResult, len(toolCalls))
+	toolErrs := make([]error, len(toolCalls))
+
+	if o.provider.SupportsParallelToolCalls() && len(toolCalls) > 1 {
+		// Parallel dispatch: workers write to fixed-index slots only.
+		// No event emission from goroutines (sole-producer rule).
+		g, gctx := errgroup.WithContext(ctx)
+		for i, call := range toolCalls {
+			g.Go(func() error {
+				result, err := o.toolInvoker.Invoke(gctx, ictx, call)
+				toolResults[i] = result
+				toolErrs[i] = err
+				return nil // collect errors, don't cancel siblings
+			})
+		}
+		_ = g.Wait()
+	} else {
+		// Sequential dispatch: single tool or provider without parallel support.
+		for i, call := range toolCalls {
+			result, err := o.toolInvoker.Invoke(ctx, ictx, call)
+			toolResults[i] = result
+			toolErrs[i] = err
+			if err != nil {
+				break // stop on first error in sequential mode
+			}
+		}
+	}
+
+	// Check errors in original call order; return the first failure.
+	for i, err := range toolErrs {
 		if err != nil {
 			return llm.Message{}, nil, errors.NewSystemError(
-				fmt.Sprintf("tool invoker failure for call %q", call.CallID), err)
+				fmt.Sprintf("tool invoker failure for call %q", toolCalls[i].CallID), err)
 		}
+	}
 
+	// Phase 4: Emit ToolCallCompleted events in original call order.
+	for _, call := range toolCalls {
 		sink(ctx, event.InvocationEvent{
 			Type: event.EventTypeToolCallCompleted, State: state.ToolCall,
 			At: time.Now(), ToolCallID: call.CallID, ToolName: call.Name,
 		})
-
-		toolResults = append(toolResults, result)
 	}
 
-	// PostToolFilter state — apply filter to each tool result.
+	// Phase 5: PostToolFilter state — apply filter to each tool result.
 	if err := machine.Transition(state.PostToolFilter); err != nil {
 		return llm.Message{}, nil, errors.NewSystemError("transition to PostToolFilter failed", err)
 	}

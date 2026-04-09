@@ -6,6 +6,7 @@ import (
 	"context"
 	stderrors "errors"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -156,9 +157,12 @@ func TestE2E_ParallelToolCalls(t *testing.T) {
 		{CallID: "c3", Name: "tool_c", ArgumentsJSON: []byte(`{}`)},
 	}
 
+	var mu sync.Mutex
 	invokedIDs := make(map[string]bool)
 	inv := funcInvoker(func(_ context.Context, _ tools.InvocationContext, call tools.ToolCall) (tools.ToolResult, error) {
+		mu.Lock()
 		invokedIDs[call.CallID] = true
+		mu.Unlock()
 		return tools.ToolResult{
 			CallID:  call.CallID,
 			Content: "ok",
