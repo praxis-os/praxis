@@ -233,7 +233,16 @@ func (o *Orchestrator) evaluatePolicy(
 	phase hooks.Phase,
 	input hooks.PolicyInput,
 ) (*praxis.InvocationResult, string) {
-	decision, err := o.policyHook.Evaluate(ctx, phase, input)
+	var decision hooks.Decision
+	var err error
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				err = fmt.Errorf("panic in policy hook at %s: %v", phase, r)
+			}
+		}()
+		decision, err = o.policyHook.Evaluate(ctx, phase, input)
+	}()
 	if err != nil {
 		return o.failLoop(ctx, machine, sink, errors.NewSystemError(
 			fmt.Sprintf("policy hook error at %s", phase), err)), ""
@@ -288,7 +297,17 @@ func (o *Orchestrator) applyPreLLMFilter(
 	emitTerminal func(event.EventType, state.State, error),
 	messages []llm.Message,
 ) ([]llm.Message, *praxis.InvocationResult) {
-	filtered, decisions, err := o.preLLMFilter.Filter(ctx, messages)
+	var filtered []llm.Message
+	var decisions []hooks.FilterDecision
+	var err error
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				err = fmt.Errorf("panic in pre-LLM filter: %v", r)
+			}
+		}()
+		filtered, decisions, err = o.preLLMFilter.Filter(ctx, messages)
+	}()
 	if err != nil {
 		result := o.failLoop(ctx, machine, sink, errors.NewSystemError("pre-LLM filter error", err))
 		return nil, result
@@ -467,7 +486,17 @@ func (o *Orchestrator) handleToolCallsWithEvents(
 	})
 
 	for _, tr := range toolResults {
-		filtered, decisions, filterErr := o.postToolFilter.Filter(ctx, tr)
+		var filtered tools.ToolResult
+		var decisions []hooks.FilterDecision
+		var filterErr error
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					filterErr = fmt.Errorf("panic in post-tool filter: %v", r)
+				}
+			}()
+			filtered, decisions, filterErr = o.postToolFilter.Filter(ctx, tr)
+		}()
 		if filterErr != nil {
 			return llm.Message{}, errors.NewSystemError("post-tool filter error", filterErr)
 		}
