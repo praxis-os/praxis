@@ -39,20 +39,28 @@ jobs:
   conformance:
     name: conformance
     runs-on: ubuntu-latest
-    # Stub: runs at 04:00 UTC. Full implementation requires a live LLM
-    # conformance suite in llm/conformance/... with ANTHROPIC_API_KEY and
-    # OPENAI_API_KEY secrets (D88). Until that package exists this job is
-    # a labelled placeholder that exits successfully.
+    # Runs at 04:00 UTC (D88). Requires ANTHROPIC_API_KEY and OPENAI_API_KEY
+    # secrets. Budget-capped to short prompts (max 100 tokens per test).
+    # On failure, opens a GitHub issue with the test output.
     if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 4 * * *'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version: "1.26.x"
-      - name: Conformance suite (stub)
+      - name: Run LLM conformance suite
+        id: run-conformance
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          echo "Conformance suite stub — llm/conformance/ not yet implemented."
-          echo "This job will run live LLM provider tests once the package exists."
-          echo "Required secrets: ANTHROPIC_API_KEY, OPENAI_API_KEY"
-          echo "Budget caps: PRAXIS_CONFORMANCE_MAX_TOKENS=100, PRAXIS_CONFORMANCE_MAX_COST_CENTS=50"
-          exit 0
+          go test -tags conformance -v -count=1 -timeout=120s ./llm/conformance/ 2>&1 | tee conformance-output.txt
+      - name: Open issue on failure
+        if: failure()
+        uses: peter-evans/create-issue-from-file@v5
+        with:
+          title: "Nightly conformance suite failure"
+          content-filepath: conformance-output.txt
+          labels: |
+            bug
+            priority/high
