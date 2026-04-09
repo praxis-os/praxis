@@ -74,6 +74,16 @@ func (o *Orchestrator) runLoop(
 	}
 	emit(event.EventTypeInvocationStarted, state.Initializing)
 
+	// Enrich telemetry attributes (D60). Called once at Initializing; the
+	// returned map is attached to every subsequent event. The first event
+	// (InvocationStarted) has nil EnricherAttributes by design.
+	enricherAttrs := o.attributeEnricher.Enrich(ctx)
+	originalSink := sink
+	sink = func(ctx context.Context, e event.InvocationEvent) {
+		e.EnricherAttributes = enricherAttrs
+		originalSink(ctx, e)
+	}
+
 	// Sign identity token at Initializing (D73). Claims include the
 	// invocation ID and, for nested orchestrators, the parent token (D75).
 	signClaims := map[string]any{

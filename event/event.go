@@ -74,4 +74,10 @@ type InvocationEvent struct {
 	// FilterAction is the FilterAction string value from the FilterDecision.
 	// Non-empty only on content-analysis events.
 	FilterAction string
+
+	// EnricherAttributes holds caller-specific attributes from
+	// [telemetry.AttributeEnricher.Enrich], attached to every event after
+	// EventTypeInvocationStarted. Nil when no enricher is configured or
+	// on the first event (InvocationStarted).
+	EnricherAttributes map[string]string
 }

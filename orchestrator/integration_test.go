@@ -727,3 +727,47 @@ func TestIntegration_FullStack_StreamAll14(t *testing.T) {
 		t.Error("PostToolFilter not called in stream path")
 	}
 }
+
+// TestIntegration_AttributeEnricher_Propagated verifies that
+// AttributeEnricher.Enrich is called at Initializing and its return value
+// is attached to every event after InvocationStarted (D60).
+func TestIntegration_AttributeEnricher_Propagated(t *testing.T) {
+	enricher := &recordingEnricher{}
+	p := mock.NewSimple("enriched response")
+
+	o, _ := orchestrator.New(p,
+		orchestrator.WithDefaultModel("m"),
+		orchestrator.WithAttributeEnricher(enricher),
+	)
+
+	ch := o.InvokeStream(context.Background(), praxis.InvocationRequest{
+		Messages: userMsg("hi"),
+	})
+	events := drainEvents(ch)
+
+	if enricher.calls.Load() != 1 {
+		t.Errorf("Enricher calls: want 1, got %d", enricher.calls.Load())
+	}
+
+	// InvocationStarted (first event) should have nil EnricherAttributes.
+	if len(events) < 2 {
+		t.Fatalf("expected >=2 events, got %d", len(events))
+	}
+	if events[0].Type != event.EventTypeInvocationStarted {
+		t.Fatalf("first event: want InvocationStarted, got %q", events[0].Type)
+	}
+	if events[0].EnricherAttributes != nil {
+		t.Errorf("InvocationStarted: want nil EnricherAttributes, got %v", events[0].EnricherAttributes)
+	}
+
+	// All subsequent events should carry the enricher attributes.
+	for i := 1; i < len(events); i++ {
+		if events[i].EnricherAttributes == nil {
+			t.Errorf("event[%d] (%s): EnricherAttributes is nil, want non-nil", i, events[i].Type)
+			continue
+		}
+		if events[i].EnricherAttributes["test.attr"] != "integration" {
+			t.Errorf("event[%d] (%s): want test.attr=integration, got %v", i, events[i].Type, events[i].EnricherAttributes)
+		}
+	}
+}
