@@ -150,10 +150,10 @@
 | T23.3 | PRAX-136 | PRAX-31 | benchstat in PR CI | 5 | Done |
 | T23.4 | PRAX-137 | PRAX-31 | Conformance suite green | 5 | Done |
 | T20.3 | PRAX-126 | PRAX-28 | 26 security invariant tests | 6 | Done |
-| T24.1 | PRAX-138 | PRAX-32 | 85% coverage maintained | 6 | To Do |
-| T24.2 | PRAX-139 | PRAX-32 | All CI jobs operational | 6 | To Do |
-| T24.3 | PRAX-140 | PRAX-32 | Godoc on every exported symbol | 6 | To Do |
-| T24.4 | PRAX-141 | PRAX-32 | Integration tests for 14 interfaces | 6 | To Do |
+| T24.1 | PRAX-138 | PRAX-32 | 85% coverage maintained | 6 | Done |
+| T24.2 | PRAX-139 | PRAX-32 | All CI jobs operational | 6 | Done |
+| T24.3 | PRAX-140 | PRAX-32 | Godoc on every exported symbol | 6 | Done |
+| T24.4 | PRAX-141 | PRAX-32 | Integration tests for 14 interfaces | 6 | Done |
 | T25.1 | PRAX-142 | PRAX-33 | examples/identity/ | 6 | Done |
 | T25.2 | PRAX-143 | PRAX-33 | examples/credentials/ | 6 | Done |
 | T20.4 | PRAX-155 | PRAX-28 | Activate PhasePreLLMInput in loop | 6 | Done |
