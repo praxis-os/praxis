@@ -162,6 +162,18 @@ func (o *Orchestrator) runIteration(
 		return messages, iterations, result
 	}
 
+	// Per-turn policy evaluation before each LLM call (PhasePreLLMInput).
+	preLLMResult, _ := o.evaluatePolicy(ctx, machine, sink, emit, emitTerminal, hooks.PhasePreLLMInput, hooks.PolicyInput{
+		InvocationID: invocationID,
+		Model:        model,
+		SystemPrompt: req.SystemPrompt,
+		Messages:     messages,
+		Metadata:     req.Metadata,
+	})
+	if preLLMResult != nil {
+		return messages, iterations, preLLMResult
+	}
+
 	// Pre-LLM filter chain.
 	filtered, filterResult := o.applyPreLLMFilter(ctx, machine, sink, emitTerminal, messages)
 	if filterResult != nil {
@@ -202,11 +214,24 @@ func (o *Orchestrator) runIteration(
 	messages = append(messages, resp.Message)
 
 	if resp.StopReason == llm.StopReasonToolUse {
-		toolResultMsg, toolErr := o.handleToolCallsWithEvents(ctx, resp.Message, machine, sink, invocationID, signedIdentity)
+		toolResultMsg, lastToolResult, toolErr := o.handleToolCallsWithEvents(ctx, resp.Message, machine, sink, invocationID, signedIdentity)
 		if toolErr != nil {
 			_ = machine.Transition(state.Failed)
 			emitTerminal(event.EventTypeInvocationFailed, state.Failed, toolErr)
 			return messages, iterations, &praxis.InvocationResult{FinalState: state.Failed}
+		}
+
+		// Post-tool-output policy evaluation (PhasePostToolOutput).
+		postToolResult, _ := o.evaluatePolicy(ctx, machine, sink, emit, emitTerminal, hooks.PhasePostToolOutput, hooks.PolicyInput{
+			InvocationID: invocationID,
+			Model:        model,
+			SystemPrompt: req.SystemPrompt,
+			Messages:     messages,
+			ToolResult:   lastToolResult,
+			Metadata:     req.Metadata,
+		})
+		if postToolResult != nil {
+			return messages, iterations, postToolResult
 		}
 
 		messages = append(messages, toolResultMsg)
@@ -469,7 +494,9 @@ func (o *Orchestrator) completeLoop(
 }
 
 // handleToolCallsWithEvents dispatches tool calls with event emission
-// and post-tool filter chain.
+// and post-tool filter chain. Returns the assembled tool-result message,
+// the last filtered tool result (for PhasePostToolOutput policy input),
+// and any error.
 func (o *Orchestrator) handleToolCallsWithEvents(
 	ctx context.Context,
 	msg llm.Message,
@@ -477,9 +504,10 @@ func (o *Orchestrator) handleToolCallsWithEvents(
 	sink eventSink,
 	invocationID string,
 	signedIdentity string,
-) (llm.Message, error) {
+) (llm.Message, *tools.ToolResult, error) {
 	var resultParts []llm.MessagePart
 	var toolResults []tools.ToolResult
+	var lastToolResult *tools.ToolResult
 	ictx := tools.InvocationContext{
 		InvocationID:  invocationID,
 		SignedIdentity: signedIdentity,
@@ -499,12 +527,12 @@ func (o *Orchestrator) handleToolCallsWithEvents(
 	}
 
 	if len(toolCalls) == 0 {
-		return llm.Message{}, errors.NewSystemError(
+		return llm.Message{}, nil, errors.NewSystemError(
 			"StopReasonToolUse with no tool call parts in assistant message", nil)
 	}
 
 	if err := machine.Transition(state.ToolCall); err != nil {
-		return llm.Message{}, errors.NewSystemError("transition to ToolCall failed", err)
+		return llm.Message{}, nil, errors.NewSystemError("transition to ToolCall failed", err)
 	}
 
 	for _, call := range toolCalls {
@@ -517,7 +545,7 @@ func (o *Orchestrator) handleToolCallsWithEvents(
 
 		result, err := o.toolInvoker.Invoke(ctx, ictx, call)
 		if err != nil {
-			return llm.Message{}, errors.NewSystemError(
+			return llm.Message{}, nil, errors.NewSystemError(
 				fmt.Sprintf("tool invoker failure for call %q", call.CallID), err)
 		}
 
@@ -531,7 +559,7 @@ func (o *Orchestrator) handleToolCallsWithEvents(
 
 	// PostToolFilter state — apply filter to each tool result.
 	if err := machine.Transition(state.PostToolFilter); err != nil {
-		return llm.Message{}, errors.NewSystemError("transition to PostToolFilter failed", err)
+		return llm.Message{}, nil, errors.NewSystemError("transition to PostToolFilter failed", err)
 	}
 	sink(ctx, event.InvocationEvent{
 		Type: event.EventTypePostToolFilterStarted, State: state.PostToolFilter, At: time.Now(),
@@ -556,7 +584,7 @@ func (o *Orchestrator) handleToolCallsWithEvents(
 			o.logger.LogAttrs(ctx, slog.LevelError, "post-tool filter error (trust-boundary-crossing)",
 				slog.String("error", filterErr.Error()),
 			)
-			return llm.Message{}, errors.NewSystemError("post-tool filter error", filterErr)
+			return llm.Message{}, nil, errors.NewSystemError("post-tool filter error", filterErr)
 		}
 		for _, d := range decisions {
 			// Emit content-analysis events before any state transition (D59 §2.3).
@@ -572,9 +600,10 @@ func (o *Orchestrator) handleToolCallsWithEvents(
 				})
 			}
 			if d.Action == hooks.FilterActionBlock {
-				return llm.Message{}, errors.NewPolicyDeniedError("post_tool_output", d.Reason)
+				return llm.Message{}, nil, errors.NewPolicyDeniedError("post_tool_output", d.Reason)
 			}
 		}
+		lastToolResult = &filtered
 		resultParts = append(resultParts, llm.ToolResultPart(&llm.LLMToolResult{
 			CallID:  filtered.CallID,
 			Content: filtered.Content,
@@ -586,7 +615,7 @@ func (o *Orchestrator) handleToolCallsWithEvents(
 		Type: event.EventTypePostToolFilterCompleted, State: state.PostToolFilter, At: time.Now(),
 	})
 
-	return llm.Message{Role: llm.RoleUser, Parts: resultParts}, nil
+	return llm.Message{Role: llm.RoleUser, Parts: resultParts}, lastToolResult, nil
 }
 
 // failLoop transitions to Failed and emits the terminal event.

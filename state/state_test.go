@@ -169,7 +169,7 @@ func TestTransitionsPreHook(t *testing.T) {
 
 func TestTransitionsLLMCall(t *testing.T) {
 	got := Transitions(LLMCall)
-	want := []State{ToolDecision, Failed, Cancelled, BudgetExceeded}
+	want := []State{ToolDecision, Failed, ApprovalRequired, Cancelled, BudgetExceeded}
 	assertStatesEqual(t, "LLMCall", got, want)
 }
 
@@ -187,13 +187,13 @@ func TestTransitionsToolCall(t *testing.T) {
 
 func TestTransitionsPostToolFilter(t *testing.T) {
 	got := Transitions(PostToolFilter)
-	want := []State{LLMContinuation, Failed, Cancelled}
+	want := []State{LLMContinuation, Failed, ApprovalRequired, Cancelled}
 	assertStatesEqual(t, "PostToolFilter", got, want)
 }
 
 func TestTransitionsLLMContinuation(t *testing.T) {
 	got := Transitions(LLMContinuation)
-	want := []State{ToolDecision, Failed, Cancelled, BudgetExceeded}
+	want := []State{ToolDecision, Failed, ApprovalRequired, Cancelled, BudgetExceeded}
 	assertStatesEqual(t, "LLMContinuation", got, want)
 }
 

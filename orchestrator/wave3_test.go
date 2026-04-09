@@ -400,3 +400,217 @@ func TestPolicyHook_ReceivesCorrectInput(t *testing.T) {
 		t.Errorf("PolicyInput.Metadata[key]: want 'value', got %q", captured.Metadata["key"])
 	}
 }
+
+// --- PhasePreLLMInput tests ---
+
+// phaseCapturingHook captures PolicyInput at a specific phase and allows all others.
+type phaseCapturingHook struct {
+	targetPhase hooks.Phase
+	captured    *hooks.PolicyInput
+	capturedAt  *hooks.Phase
+}
+
+func (h *phaseCapturingHook) Evaluate(_ context.Context, phase hooks.Phase, input hooks.PolicyInput) (hooks.Decision, error) {
+	if phase == h.targetPhase {
+		*h.captured = input
+		if h.capturedAt != nil {
+			*h.capturedAt = phase
+		}
+	}
+	return hooks.Allow(), nil
+}
+
+func TestPolicyHook_PreLLMInput_Invoked(t *testing.T) {
+	p := mock.NewSimple("hello")
+	var captured hooks.PolicyInput
+	hook := &phaseCapturingHook{targetPhase: hooks.PhasePreLLMInput, captured: &captured}
+	o, _ := orchestrator.New(p,
+		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithPolicyHook(hook),
+	)
+
+	_, err := o.Invoke(context.Background(), praxis.InvocationRequest{
+		Messages:     userMsg("hi"),
+		SystemPrompt: "be helpful",
+		Metadata:     map[string]string{"k": "v"},
+	})
+	if err != nil {
+		t.Fatalf("Invoke: %v", err)
+	}
+
+	if captured.Model != "test-model" {
+		t.Errorf("PolicyInput.Model: want test-model, got %q", captured.Model)
+	}
+	if captured.SystemPrompt != "be helpful" {
+		t.Errorf("PolicyInput.SystemPrompt: want 'be helpful', got %q", captured.SystemPrompt)
+	}
+	if len(captured.Messages) == 0 {
+		t.Error("PolicyInput.Messages: want non-empty at PhasePreLLMInput")
+	}
+	if captured.Metadata["k"] != "v" {
+		t.Errorf("PolicyInput.Metadata[k]: want 'v', got %q", captured.Metadata["k"])
+	}
+}
+
+func TestPolicyHook_PreLLMInput_Deny(t *testing.T) {
+	p := mock.NewSimple("unreachable")
+	o, _ := orchestrator.New(p,
+		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithPolicyHook(phaseVerdictHook{
+			phase:   hooks.PhasePreLLMInput,
+			verdict: hooks.Deny("blocked at pre-LLM"),
+		}),
+	)
+
+	result, err := o.Invoke(context.Background(), praxis.InvocationRequest{
+		Messages: userMsg("hi"),
+	})
+	if err == nil {
+		t.Fatal("expected error from PhasePreLLMInput deny")
+	}
+	if result.FinalState != state.Failed {
+		t.Errorf("FinalState: want Failed, got %v", result.FinalState)
+	}
+	// LLM should never have been called.
+	if p.CallCount() != 0 {
+		t.Errorf("CallCount: want 0, got %d", p.CallCount())
+	}
+}
+
+func TestPolicyHook_PreLLMInput_RequireApproval(t *testing.T) {
+	p := mock.NewSimple("unreachable")
+	o, _ := orchestrator.New(p,
+		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithPolicyHook(phaseVerdictHook{
+			phase:   hooks.PhasePreLLMInput,
+			verdict: hooks.RequireApproval("needs review", nil),
+		}),
+	)
+
+	result, err := o.Invoke(context.Background(), praxis.InvocationRequest{
+		Messages: userMsg("hi"),
+	})
+	if err == nil {
+		t.Fatal("expected error from PhasePreLLMInput require-approval")
+	}
+	if result.FinalState != state.ApprovalRequired {
+		t.Errorf("FinalState: want ApprovalRequired, got %v", result.FinalState)
+	}
+}
+
+// --- PhasePostToolOutput tests ---
+
+func TestPolicyHook_PostToolOutput_Invoked(t *testing.T) {
+	p := mock.New(
+		mock.Response{
+			LLMResponse: llm.LLMResponse{
+				Message: llm.Message{
+					Role: llm.RoleAssistant,
+					Parts: []llm.MessagePart{
+						llm.ToolCallPart(&llm.LLMToolCall{CallID: "c1", Name: "search", ArgumentsJSON: []byte(`{}`)}),
+					},
+				},
+				StopReason: llm.StopReasonToolUse,
+			},
+		},
+		mock.Response{
+			LLMResponse: llm.LLMResponse{
+				Message: llm.Message{
+					Role:  llm.RoleAssistant,
+					Parts: []llm.MessagePart{llm.TextPart("done")},
+				},
+				StopReason: llm.StopReasonEndTurn,
+			},
+		},
+	)
+	var captured hooks.PolicyInput
+	hook := &phaseCapturingHook{targetPhase: hooks.PhasePostToolOutput, captured: &captured}
+	o, _ := orchestrator.New(p,
+		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithPolicyHook(hook),
+	)
+
+	_, err := o.Invoke(context.Background(), praxis.InvocationRequest{
+		Messages: userMsg("do something"),
+		Metadata: map[string]string{"k": "v"},
+	})
+	if err != nil {
+		t.Fatalf("Invoke: %v", err)
+	}
+
+	if captured.Model != "test-model" {
+		t.Errorf("PolicyInput.Model: want test-model, got %q", captured.Model)
+	}
+	if captured.ToolResult == nil {
+		t.Error("PolicyInput.ToolResult: want non-nil at PhasePostToolOutput")
+	}
+	if captured.Metadata["k"] != "v" {
+		t.Errorf("PolicyInput.Metadata[k]: want 'v', got %q", captured.Metadata["k"])
+	}
+}
+
+func TestPolicyHook_PostToolOutput_Deny(t *testing.T) {
+	p := mock.New(
+		mock.Response{
+			LLMResponse: llm.LLMResponse{
+				Message: llm.Message{
+					Role: llm.RoleAssistant,
+					Parts: []llm.MessagePart{
+						llm.ToolCallPart(&llm.LLMToolCall{CallID: "c1", Name: "search", ArgumentsJSON: []byte(`{}`)}),
+					},
+				},
+				StopReason: llm.StopReasonToolUse,
+			},
+		},
+	)
+	o, _ := orchestrator.New(p,
+		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithPolicyHook(phaseVerdictHook{
+			phase:   hooks.PhasePostToolOutput,
+			verdict: hooks.Deny("tool output rejected"),
+		}),
+	)
+
+	result, err := o.Invoke(context.Background(), praxis.InvocationRequest{
+		Messages: userMsg("do something"),
+	})
+	if err == nil {
+		t.Fatal("expected error from PhasePostToolOutput deny")
+	}
+	if result.FinalState != state.Failed {
+		t.Errorf("FinalState: want Failed, got %v", result.FinalState)
+	}
+}
+
+func TestPolicyHook_PostToolOutput_RequireApproval(t *testing.T) {
+	p := mock.New(
+		mock.Response{
+			LLMResponse: llm.LLMResponse{
+				Message: llm.Message{
+					Role: llm.RoleAssistant,
+					Parts: []llm.MessagePart{
+						llm.ToolCallPart(&llm.LLMToolCall{CallID: "c1", Name: "search", ArgumentsJSON: []byte(`{}`)}),
+					},
+				},
+				StopReason: llm.StopReasonToolUse,
+			},
+		},
+	)
+	o, _ := orchestrator.New(p,
+		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithPolicyHook(phaseVerdictHook{
+			phase:   hooks.PhasePostToolOutput,
+			verdict: hooks.RequireApproval("review tool output", nil),
+		}),
+	)
+
+	result, err := o.Invoke(context.Background(), praxis.InvocationRequest{
+		Messages: userMsg("do something"),
+	})
+	if err == nil {
+		t.Fatal("expected error from PhasePostToolOutput require-approval")
+	}
+	if result.FinalState != state.ApprovalRequired {
+		t.Errorf("FinalState: want ApprovalRequired, got %v", result.FinalState)
+	}
+}
