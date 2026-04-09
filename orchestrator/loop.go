@@ -304,11 +304,17 @@ func (o *Orchestrator) applyPreLLMFilter(
 		defer func() {
 			if r := recover(); r != nil {
 				err = fmt.Errorf("panic in pre-LLM filter: %v", r)
+				o.logger.LogAttrs(ctx, slog.LevelWarn, "pre-LLM filter panic recovered",
+					slog.Any("panic", r),
+				)
 			}
 		}()
 		filtered, decisions, err = o.preLLMFilter.Filter(ctx, messages)
 	}()
 	if err != nil {
+		o.logger.LogAttrs(ctx, slog.LevelWarn, "pre-LLM filter error (trust-boundary-internal)",
+			slog.String("error", err.Error()),
+		)
 		result := o.failLoop(ctx, machine, sink, errors.NewSystemError("pre-LLM filter error", err))
 		return nil, result
 	}
@@ -493,11 +499,17 @@ func (o *Orchestrator) handleToolCallsWithEvents(
 			defer func() {
 				if r := recover(); r != nil {
 					filterErr = fmt.Errorf("panic in post-tool filter: %v", r)
+					o.logger.LogAttrs(ctx, slog.LevelError, "post-tool filter panic recovered (trust-boundary-crossing)",
+						slog.Any("panic", r),
+					)
 				}
 			}()
 			filtered, decisions, filterErr = o.postToolFilter.Filter(ctx, tr)
 		}()
 		if filterErr != nil {
+			o.logger.LogAttrs(ctx, slog.LevelError, "post-tool filter error (trust-boundary-crossing)",
+				slog.String("error", filterErr.Error()),
+			)
 			return llm.Message{}, errors.NewSystemError("post-tool filter error", filterErr)
 		}
 		for _, d := range decisions {

@@ -4,6 +4,7 @@ package orchestrator
 
 import (
 	"fmt"
+	"log/slog"
 
 	"github.com/praxis-os/praxis/budget"
 	"github.com/praxis-os/praxis/credentials"
@@ -171,6 +172,18 @@ func WithIdentitySigner(s identity.Signer) Option {
 			return fmt.Errorf("orchestrator: WithIdentitySigner must not be nil")
 		}
 		o.identitySigner = s
+		return nil
+	}
+}
+
+// WithLogger sets the [*slog.Logger] used for trust-boundary and diagnostic
+// logging. Passing nil returns an error. Default: [slog.Default].
+func WithLogger(l *slog.Logger) Option {
+	return func(o *Orchestrator) error {
+		if l == nil {
+			return fmt.Errorf("orchestrator: WithLogger must not be nil")
+		}
+		o.logger = l
 		return nil
 	}
 }
