@@ -190,6 +190,45 @@ func TestEd25519Signer_SubjectMatchesInvocationID(t *testing.T) {
 	}
 }
 
+func TestEd25519Signer_ToolNameIsFirstClassClaim(t *testing.T) {
+	_, priv := generateTestKey(t)
+	signer, _ := identity.NewEd25519Signer(priv)
+
+	token, err := signer.Sign(context.Background(), map[string]any{
+		jwt.ClaimInvocationID: "inv-tool",
+		jwt.ClaimToolName:     "tools.Search",
+	})
+	if err != nil {
+		t.Fatalf("Sign: %v", err)
+	}
+
+	payload := decodePayload(t, token)
+
+	if got := payload[jwt.ClaimToolName]; got != "tools.Search" {
+		t.Errorf("praxis.tool_name = %v, want %q", got, "tools.Search")
+	}
+}
+
+func TestEd25519Signer_ToolNameProtectedFromExtraOverride(t *testing.T) {
+	_, priv := generateTestKey(t)
+	signer, _ := identity.NewEd25519Signer(priv)
+
+	// Pass tool_name in incoming claims; it should be promoted to a named
+	// field and not overwritable by Extra collision.
+	token, err := signer.Sign(context.Background(), map[string]any{
+		jwt.ClaimInvocationID: "inv-1",
+		jwt.ClaimToolName:     "tools.Legit",
+	})
+	if err != nil {
+		t.Fatalf("Sign: %v", err)
+	}
+
+	payload := decodePayload(t, token)
+	if got := payload[jwt.ClaimToolName]; got != "tools.Legit" {
+		t.Errorf("praxis.tool_name = %v, want %q", got, "tools.Legit")
+	}
+}
+
 func TestEd25519Signer_MandatoryClaimsOverrideIncoming(t *testing.T) {
 	_, priv := generateTestKey(t)
 	signer, _ := identity.NewEd25519Signer(priv)

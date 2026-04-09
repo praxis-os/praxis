@@ -108,6 +108,11 @@ type Claims struct {
 	// (claim name: "praxis.invocation_id").
 	InvocationID string
 
+	// ToolName is the praxis-specific tool name claim identifying the tool
+	// for which this identity token was issued
+	// (claim name: "praxis.tool_name").
+	ToolName string
+
 	// ParentToken is the signed token of the parent invocation, if any
 	// (claim name: "praxis.parent_token").
 	ParentToken string
@@ -174,6 +179,9 @@ func marshalPayload(c Claims) ([]byte, error) {
 	}
 	if c.InvocationID != "" {
 		m[ClaimInvocationID] = c.InvocationID
+	}
+	if c.ToolName != "" {
+		m[ClaimToolName] = c.ToolName
 	}
 	if c.ParentToken != "" {
 		m[ClaimParentToken] = c.ParentToken

@@ -93,6 +93,12 @@ func (s *ed25519Signer) Sign(_ context.Context, claims map[string]any) (string, 
 		invocationID = id
 	}
 
+	// Extract tool name.
+	var toolName string
+	if tn, ok := claims[jwt.ClaimToolName].(string); ok {
+		toolName = tn
+	}
+
 	// Extract parent token if present.
 	var parentToken string
 	if pt, ok := claims[jwt.ClaimParentToken].(string); ok {
@@ -118,6 +124,7 @@ func (s *ed25519Signer) Sign(_ context.Context, claims map[string]any) (string, 
 	delete(extra, jwt.ClaimExpiration)
 	delete(extra, jwt.ClaimIssuedAt)
 	delete(extra, jwt.ClaimInvocationID)
+	delete(extra, jwt.ClaimToolName)
 	delete(extra, jwt.ClaimParentToken)
 
 	// jti is added after cleanup — it is signer-generated and must always
@@ -131,6 +138,7 @@ func (s *ed25519Signer) Sign(_ context.Context, claims map[string]any) (string, 
 		IssuedAt:     now,
 		Expiration:   now.Add(s.tokenLifetime),
 		InvocationID: invocationID,
+		ToolName:     toolName,
 		ParentToken:  parentToken,
 		Extra:        extra,
 	}

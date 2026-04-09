@@ -209,6 +209,7 @@ func TestEncode_PraxisClaims(t *testing.T) {
 
 	claims := Claims{
 		InvocationID: "inv-abc123",
+		ToolName:     "tools.Search",
 		ParentToken:  "parent.jwt.token",
 	}
 	token, err := Encode(claims, priv)
@@ -220,6 +221,9 @@ func TestEncode_PraxisClaims(t *testing.T) {
 
 	if got := payload[ClaimInvocationID]; got != "inv-abc123" {
 		t.Errorf("%s = %v, want %q", ClaimInvocationID, got, "inv-abc123")
+	}
+	if got := payload[ClaimToolName]; got != "tools.Search" {
+		t.Errorf("%s = %v, want %q", ClaimToolName, got, "tools.Search")
 	}
 	if got := payload[ClaimParentToken]; got != "parent.jwt.token" {
 		t.Errorf("%s = %v, want %q", ClaimParentToken, got, "parent.jwt.token")
@@ -312,7 +316,7 @@ func TestEncode_OmitsEmptyStringFields(t *testing.T) {
 
 	_, payload := decodeToken(t, token)
 
-	for _, name := range []string{ClaimIssuer, ClaimSubject, ClaimAudience, ClaimInvocationID, ClaimParentToken} {
+	for _, name := range []string{ClaimIssuer, ClaimSubject, ClaimAudience, ClaimInvocationID, ClaimToolName, ClaimParentToken} {
 		if _, ok := payload[name]; ok {
 			t.Errorf("claim %q present for zero/empty value, want omitted", name)
 		}
@@ -393,6 +397,7 @@ func TestClaimConstants(t *testing.T) {
 		{"ClaimExpiration", "exp"},
 		{"ClaimIssuedAt", "iat"},
 		{"ClaimInvocationID", "praxis.invocation_id"},
+		{"ClaimToolName", "praxis.tool_name"},
 		{"ClaimParentToken", "praxis.parent_token"},
 	}
 	actuals := map[string]string{
@@ -402,6 +407,7 @@ func TestClaimConstants(t *testing.T) {
 		"ClaimExpiration":   ClaimExpiration,
 		"ClaimIssuedAt":     ClaimIssuedAt,
 		"ClaimInvocationID": ClaimInvocationID,
+		"ClaimToolName":     ClaimToolName,
 		"ClaimParentToken":  ClaimParentToken,
 	}
 	for _, tc := range tests {
