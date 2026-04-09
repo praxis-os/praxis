@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/praxis-os/praxis/compare/v0.3.0...v0.5.0) (2026-04-09)
+
+
+### Added
+
+* v0.5.0 — feature complete ([#19](https://github.com/praxis-os/praxis/issues/19)) ([3adaf43](https://github.com/praxis-os/praxis/commit/3adaf433d1ea48ef2ac418f5a20bb346f892fd1b))
+
 ## [0.3.0](https://github.com/praxis-os/praxis/compare/v0.1.0...v0.3.0) (2026-04-08)
 
 
