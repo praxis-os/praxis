@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/praxis-os/praxis/identity"
 	"github.com/praxis-os/praxis/internal/jwt"
@@ -280,6 +281,18 @@ func TestEd25519Signer_ExpirationIsIatPlusLifetime(t *testing.T) {
 	diff := exp - iat
 	if diff != 60 {
 		t.Errorf("exp - iat = %v, want 60 (default lifetime)", diff)
+	}
+}
+
+func TestTokenLifetimeConstants(t *testing.T) {
+	if identity.DefaultTokenLifetime != 60*time.Second {
+		t.Errorf("DefaultTokenLifetime = %v, want 60s", identity.DefaultTokenLifetime)
+	}
+	if identity.MinTokenLifetime != 5*time.Second {
+		t.Errorf("MinTokenLifetime = %v, want 5s", identity.MinTokenLifetime)
+	}
+	if identity.MaxTokenLifetime != 300*time.Second {
+		t.Errorf("MaxTokenLifetime = %v, want 300s", identity.MaxTokenLifetime)
 	}
 }
 

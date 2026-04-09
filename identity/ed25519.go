@@ -29,8 +29,19 @@ type ed25519Signer struct {
 // ed25519KeySize is the expected length (in bytes) of an Ed25519 private key.
 const ed25519KeySize = ed25519.PrivateKeySize // 64
 
-// Default token lifetime.
-const defaultTokenLifetime = 60 * time.Second
+// Token lifetime constants per D72.
+
+// DefaultTokenLifetime is the token lifetime used when no WithTokenLifetime
+// option is provided (60 seconds).
+const DefaultTokenLifetime = 60 * time.Second
+
+// MinTokenLifetime is the minimum allowed token lifetime (5 seconds).
+// Values below this are rejected at construction time.
+const MinTokenLifetime = 5 * time.Second
+
+// MaxTokenLifetime is the maximum allowed token lifetime (300 seconds).
+// Values above this are rejected at construction time.
+const MaxTokenLifetime = 300 * time.Second
 
 // NewEd25519Signer returns a [Signer] that produces Ed25519-signed JWTs.
 //
@@ -57,7 +68,7 @@ func NewEd25519Signer(key ed25519.PrivateKey, opts ...SignerOption) (Signer, err
 	s := &ed25519Signer{
 		key:           key,
 		issuer:        "praxis",
-		tokenLifetime: defaultTokenLifetime,
+		tokenLifetime: DefaultTokenLifetime,
 	}
 
 	for _, opt := range opts {
@@ -144,6 +155,17 @@ func (s *ed25519Signer) Sign(_ context.Context, claims map[string]any) (string, 
 	}
 
 	return jwt.Encode(jwtClaims, s.key)
+}
+
+// validateTokenLifetime checks that d is within [MinTokenLifetime, MaxTokenLifetime].
+func validateTokenLifetime(d time.Duration) error {
+	if d < MinTokenLifetime {
+		return fmt.Errorf("token lifetime %v is below minimum %v", d, MinTokenLifetime)
+	}
+	if d > MaxTokenLifetime {
+		return fmt.Errorf("token lifetime %v exceeds maximum %v", d, MaxTokenLifetime)
+	}
+	return nil
 }
 
 // generateUUIDv7 produces a UUIDv7 string using the given timestamp for the
