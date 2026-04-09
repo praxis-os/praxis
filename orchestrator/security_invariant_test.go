@@ -1148,8 +1148,8 @@ func TestSecurityInvariant_O4_EnricherAttributesNotInResultEvents(t *testing.T) 
 }
 
 // TestSecurityInvariant_O5_NoBannedIdentifiersInOrchestratorOptions verifies
-// that the orchestrator API surface does not contain banned identifiers
-// (custos, reef, governance_event) per the decoupling contract.
+// that the orchestrator API surface does not contain consumer-specific
+// identifiers per the decoupling contract (D80).
 //
 // This test exercises the type signatures via compile-time usage. If any
 // option function accepted a consumer-specific type it would fail to compile.
