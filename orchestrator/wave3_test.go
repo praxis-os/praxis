@@ -614,3 +614,127 @@ func TestPolicyHook_PostToolOutput_RequireApproval(t *testing.T) {
 		t.Errorf("FinalState: want ApprovalRequired, got %v", result.FinalState)
 	}
 }
+
+// --- PreToolFilter tests ---
+
+type blockingPreToolFilter struct {
+	reason string
+}
+
+func (f blockingPreToolFilter) Filter(_ context.Context, call tools.ToolCall) (tools.ToolCall, []hooks.FilterDecision, error) {
+	return call, []hooks.FilterDecision{{Action: hooks.FilterActionBlock, Field: "tool_call", Reason: f.reason}}, nil
+}
+
+type modifyingPreToolFilter struct{}
+
+func (modifyingPreToolFilter) Filter(_ context.Context, call tools.ToolCall) (tools.ToolCall, []hooks.FilterDecision, error) {
+	call.ArgumentsJSON = []byte(`{"modified":true}`)
+	return call, []hooks.FilterDecision{{Action: hooks.FilterActionPass, Field: "arguments"}}, nil
+}
+
+func toolCallProvider() *mock.Provider {
+	return mock.New(
+		mock.Response{
+			LLMResponse: llm.LLMResponse{
+				Message: llm.Message{
+					Role: llm.RoleAssistant,
+					Parts: []llm.MessagePart{
+						llm.ToolCallPart(&llm.LLMToolCall{CallID: "c1", Name: "search", ArgumentsJSON: []byte(`{}`)}),
+					},
+				},
+				StopReason: llm.StopReasonToolUse,
+			},
+		},
+		mock.Response{
+			LLMResponse: llm.LLMResponse{
+				Message: llm.Message{
+					Role:  llm.RoleAssistant,
+					Parts: []llm.MessagePart{llm.TextPart("done")},
+				},
+				StopReason: llm.StopReasonEndTurn,
+			},
+		},
+	)
+}
+
+func TestPreToolFilter_PassThrough(t *testing.T) {
+	p := toolCallProvider()
+	o, _ := orchestrator.New(p, orchestrator.WithDefaultModel("test-model"))
+
+	result, err := o.Invoke(context.Background(), praxis.InvocationRequest{
+		Messages: userMsg("do something"),
+	})
+	if err != nil {
+		t.Fatalf("Invoke: %v", err)
+	}
+	if result.FinalState != state.Completed {
+		t.Errorf("FinalState: want Completed, got %v", result.FinalState)
+	}
+}
+
+func TestPreToolFilter_Block(t *testing.T) {
+	p := toolCallProvider()
+	o, _ := orchestrator.New(p,
+		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithPreToolFilter(blockingPreToolFilter{reason: "tool not allowed"}),
+	)
+
+	result, err := o.Invoke(context.Background(), praxis.InvocationRequest{
+		Messages: userMsg("do something"),
+	})
+	if err == nil {
+		t.Fatal("expected error from PreToolFilter block")
+	}
+	if result.FinalState != state.Failed {
+		t.Errorf("FinalState: want Failed, got %v", result.FinalState)
+	}
+}
+
+func TestPreToolFilter_ModifiesInput(t *testing.T) {
+	var capturedCall tools.ToolCall
+	invoker := tools.InvokerFunc(func(_ context.Context, _ tools.InvocationContext, call tools.ToolCall) (tools.ToolResult, error) {
+		capturedCall = call
+		return tools.ToolResult{CallID: call.CallID, Content: "ok", Status: tools.ToolStatusSuccess}, nil
+	})
+
+	p := toolCallProvider()
+	o, _ := orchestrator.New(p,
+		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithToolInvoker(invoker),
+		orchestrator.WithPreToolFilter(modifyingPreToolFilter{}),
+	)
+
+	_, err := o.Invoke(context.Background(), praxis.InvocationRequest{
+		Messages: userMsg("do something"),
+	})
+	if err != nil {
+		t.Fatalf("Invoke: %v", err)
+	}
+	if string(capturedCall.ArgumentsJSON) != `{"modified":true}` {
+		t.Errorf("ArgumentsJSON: want modified, got %q", string(capturedCall.ArgumentsJSON))
+	}
+}
+
+type panickingPreToolFilter struct{}
+
+func (panickingPreToolFilter) Filter(_ context.Context, _ tools.ToolCall) (tools.ToolCall, []hooks.FilterDecision, error) {
+	panic("boom")
+}
+
+func TestPreToolFilter_PanicRecovery(t *testing.T) {
+	p := toolCallProvider()
+	o, _ := orchestrator.New(p,
+		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithPreToolFilter(panickingPreToolFilter{}),
+	)
+
+	result, err := o.Invoke(context.Background(), praxis.InvocationRequest{
+		Messages: userMsg("do something"),
+	})
+	if err == nil {
+		t.Fatal("expected error from panicking PreToolFilter")
+	}
+	if result.FinalState != state.Failed {
+		t.Errorf("FinalState: want Failed, got %v", result.FinalState)
+	}
+}

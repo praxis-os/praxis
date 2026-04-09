@@ -536,6 +536,43 @@ func (o *Orchestrator) handleToolCallsWithEvents(
 	}
 
 	for _, call := range toolCalls {
+		// Pre-tool filter: inspect/modify/block before execution.
+		var preToolDecisions []hooks.FilterDecision
+		var preToolErr error
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					preToolErr = fmt.Errorf("panic in pre-tool filter: %v", r)
+					o.logger.LogAttrs(ctx, slog.LevelWarn, "pre-tool filter panic recovered",
+						slog.Any("panic", r),
+					)
+				}
+			}()
+			call, preToolDecisions, preToolErr = o.preToolFilter.Filter(ctx, call)
+		}()
+		if preToolErr != nil {
+			o.logger.LogAttrs(ctx, slog.LevelWarn, "pre-tool filter error (trust-boundary-internal)",
+				slog.String("error", preToolErr.Error()),
+			)
+			return llm.Message{}, nil, errors.NewSystemError("pre-tool filter error", preToolErr)
+		}
+		for _, d := range preToolDecisions {
+			for _, evtType := range telemetry.ClassifyFilterDecision(d) {
+				sink(ctx, event.InvocationEvent{
+					Type:         evtType,
+					State:        state.ToolCall,
+					At:           time.Now(),
+					FilterPhase:  "pre_tool",
+					FilterField:  d.Field,
+					FilterReason: d.Reason,
+					FilterAction: string(d.Action),
+				})
+			}
+			if d.Action == hooks.FilterActionBlock {
+				return llm.Message{}, nil, errors.NewPolicyDeniedError("pre_tool_input", d.Reason)
+			}
+		}
+
 		sink(ctx, event.InvocationEvent{
 			Type: event.EventTypeToolCallStarted, State: state.ToolCall,
 			At: time.Now(), ToolCallID: call.CallID, ToolName: call.Name,

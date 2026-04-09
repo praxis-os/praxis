@@ -38,6 +38,7 @@ type Orchestrator struct {
 	toolInvoker        tools.Invoker
 	policyHook         hooks.PolicyHook
 	preLLMFilter       hooks.PreLLMFilter
+	preToolFilter      hooks.PreToolFilter
 	postToolFilter     hooks.PostToolFilter
 	budgetGuard        budget.Guard
 	priceProvider      budget.PriceProvider
@@ -60,6 +61,7 @@ type Orchestrator struct {
 //   - toolInvoker: tools.NullInvoker{}
 //   - policyHook: hooks.AllowAllPolicyHook{}
 //   - preLLMFilter: hooks.PassThroughPreLLMFilter{}
+//   - preToolFilter: hooks.PassThroughPreToolFilter{}
 //   - postToolFilter: hooks.PassThroughPostToolFilter{}
 //   - budgetGuard: budget.NullGuard{}
 //   - priceProvider: budget.NullPriceProvider{}
@@ -81,6 +83,7 @@ func New(provider llm.Provider, opts ...Option) (*Orchestrator, error) {
 		toolInvoker:        tools.NullInvoker{},
 		policyHook:         hooks.AllowAllPolicyHook{},
 		preLLMFilter:       hooks.PassThroughPreLLMFilter{},
+		preToolFilter:      hooks.PassThroughPreToolFilter{},
 		postToolFilter:     hooks.PassThroughPostToolFilter{},
 		budgetGuard:        budget.NullGuard{},
 		priceProvider:      budget.NullPriceProvider{},

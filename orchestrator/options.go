@@ -92,6 +92,18 @@ func WithPreLLMFilter(f hooks.PreLLMFilter) Option {
 	}
 }
 
+// WithPreToolFilter sets the [hooks.PreToolFilter] applied to each tool call
+// before it is dispatched to the invoker. Passing nil returns an error.
+func WithPreToolFilter(f hooks.PreToolFilter) Option {
+	return func(o *Orchestrator) error {
+		if f == nil {
+			return fmt.Errorf("orchestrator: WithPreToolFilter must not be nil")
+		}
+		o.preToolFilter = f
+		return nil
+	}
+}
+
 // WithPostToolFilter sets the [hooks.PostToolFilter] applied to each tool
 // result before it is included in the next LLM turn. Passing nil returns an error.
 func WithPostToolFilter(f hooks.PostToolFilter) Option {

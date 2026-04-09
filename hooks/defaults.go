@@ -12,6 +12,7 @@ import (
 // Compile-time interface checks.
 var _ PolicyHook = AllowAllPolicyHook{}
 var _ PreLLMFilter = PassThroughPreLLMFilter{}
+var _ PreToolFilter = PassThroughPreToolFilter{}
 var _ PostToolFilter = PassThroughPostToolFilter{}
 
 // AllowAllPolicyHook is a [PolicyHook] that unconditionally permits every
@@ -31,6 +32,16 @@ type PassThroughPreLLMFilter struct{}
 // Filter returns the messages unchanged with no decisions.
 func (PassThroughPreLLMFilter) Filter(_ context.Context, messages []llm.Message) ([]llm.Message, []FilterDecision, error) {
 	return messages, nil, nil
+}
+
+// PassThroughPreToolFilter is a [PreToolFilter] that passes every tool call
+// through without modification. Used as the default when no pre-tool filter
+// is configured.
+type PassThroughPreToolFilter struct{}
+
+// Filter returns the call unchanged with no decisions.
+func (PassThroughPreToolFilter) Filter(_ context.Context, call tools.ToolCall) (tools.ToolCall, []FilterDecision, error) {
+	return call, nil, nil
 }
 
 // PassThroughPostToolFilter is a [PostToolFilter] that passes every tool
