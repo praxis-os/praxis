@@ -7,6 +7,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"time"
 
@@ -171,31 +172,37 @@ func (s *ed25519Signer) Sign(_ context.Context, claims map[string]any) (string, 
 		parentToken = pt
 	}
 
-	// Build Extra: incoming claims → configured extra.
-	// Mandatory claim keys set as named fields on jwt.Claims are stripped
-	// to prevent Extra from overwriting them in marshalPayload.
-	extra := make(map[string]any, len(claims)+len(s.extraClaims)+1)
-
-	for k, v := range claims {
-		extra[k] = v
-	}
-	for k, v := range s.extraClaims {
-		extra[k] = v
+	// Build Extra lazily: only allocate when non-standard claims exist.
+	// Keys that map to named fields on jwt.Claims are stripped to prevent
+	// Extra from overwriting them in marshalPayload.
+	namedKeys := map[string]struct{}{
+		jwt.ClaimIssuer: {}, jwt.ClaimSubject: {}, jwt.ClaimAudience: {},
+		jwt.ClaimExpiration: {}, jwt.ClaimIssuedAt: {}, jwt.ClaimJTI: {},
+		jwt.ClaimInvocationID: {}, jwt.ClaimToolName: {}, jwt.ClaimParentToken: {},
 	}
 
-	// Remove keys that are set as named fields on jwt.Claims.
-	delete(extra, jwt.ClaimIssuer)
-	delete(extra, jwt.ClaimSubject)
-	delete(extra, jwt.ClaimAudience)
-	delete(extra, jwt.ClaimExpiration)
-	delete(extra, jwt.ClaimIssuedAt)
-	delete(extra, jwt.ClaimInvocationID)
-	delete(extra, jwt.ClaimToolName)
-	delete(extra, jwt.ClaimParentToken)
+	// Count unknown keys in incoming claims.
+	unknownCount := 0
+	for k := range claims {
+		if _, named := namedKeys[k]; !named {
+			unknownCount++
+		}
+	}
 
-	// jti is added after cleanup — it is signer-generated and must always
-	// be present, overriding any incoming value.
-	extra[jwt.ClaimJTI] = jti
+	var extra map[string]any
+	if unknownCount+len(s.extraClaims) > 0 {
+		extra = make(map[string]any, unknownCount+len(s.extraClaims))
+		for k, v := range claims {
+			if _, named := namedKeys[k]; !named {
+				extra[k] = v
+			}
+		}
+		for k, v := range s.extraClaims {
+			if _, named := namedKeys[k]; !named {
+				extra[k] = v
+			}
+		}
+	}
 
 	jwtClaims := jwt.Claims{
 		Issuer:       s.issuer,
@@ -206,6 +213,7 @@ func (s *ed25519Signer) Sign(_ context.Context, claims map[string]any) (string, 
 		InvocationID: invocationID,
 		ToolName:     toolName,
 		ParentToken:  parentToken,
+		JTI:          jti,
 		Extra:        extra,
 	}
 
@@ -247,6 +255,17 @@ func generateUUIDv7(now time.Time) (string, error) {
 	// Variant 10: high 2 bits of byte 8 = 10.
 	uuid[8] = (uuid[8] & 0x3F) | 0x80
 
-	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
-		uuid[0:4], uuid[4:6], uuid[6:8], uuid[8:10], uuid[10:16]), nil
+	// Format as xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx using stack-allocated
+	// buffer to avoid fmt.Sprintf overhead.
+	var buf [36]byte
+	hex.Encode(buf[0:8], uuid[0:4])
+	buf[8] = '-'
+	hex.Encode(buf[9:13], uuid[4:6])
+	buf[13] = '-'
+	hex.Encode(buf[14:18], uuid[6:8])
+	buf[18] = '-'
+	hex.Encode(buf[19:23], uuid[8:10])
+	buf[23] = '-'
+	hex.Encode(buf[24:36], uuid[10:16])
+	return string(buf[:]), nil
 }

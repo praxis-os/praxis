@@ -5,6 +5,7 @@ package orchestrator
 import (
 	"context"
 	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"time"
@@ -27,10 +28,14 @@ import (
 const gracePeriod = 500 * time.Millisecond
 
 // generateInvocationID returns a random hex invocation identifier.
+// Uses stack-allocated buffer to avoid fmt.Sprintf overhead.
 func generateInvocationID() string {
 	var b [16]byte
 	_, _ = rand.Read(b[:])
-	return fmt.Sprintf("inv-%x", b[:])
+	var buf [4 + 32]byte // "inv-" + 32 hex chars
+	copy(buf[:4], "inv-")
+	hex.Encode(buf[4:], b[:])
+	return string(buf[:])
 }
 
 // eventSink abstracts where lifecycle events are delivered.

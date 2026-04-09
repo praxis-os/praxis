@@ -17,6 +17,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -117,6 +118,10 @@ type Claims struct {
 	// (claim name: "praxis.parent_token").
 	ParentToken string
 
+	// JTI is the "jti" registered claim (RFC 7519 §4.1.7).
+	// Unique token identifier, typically UUIDv7.
+	JTI string
+
 	// Extra holds arbitrary additional claims merged into the payload.
 	// Keys take precedence over the named fields above when a collision occurs.
 	Extra map[string]any
@@ -142,12 +147,18 @@ func Encode(claims Claims, key ed25519.PrivateKey, keyID string) (string, error)
 
 	header := fixedHeader
 	if keyID != "" {
-		h := map[string]string{"alg": "EdDSA", "typ": "JWT", "kid": keyID}
-		raw, err := json.Marshal(h)
-		if err != nil {
-			return "", fmt.Errorf("jwt: marshal header: %w", err)
+		// Fast path: build header via string concatenation when keyID
+		// contains no characters requiring JSON escaping.
+		if !strings.ContainsAny(keyID, `"\`) {
+			header = base64url([]byte(`{"alg":"EdDSA","kid":"` + keyID + `","typ":"JWT"}`))
+		} else {
+			h := map[string]string{"alg": "EdDSA", "typ": "JWT", "kid": keyID}
+			raw, err := json.Marshal(h)
+			if err != nil {
+				return "", fmt.Errorf("jwt: marshal header: %w", err)
+			}
+			header = base64url(raw)
 		}
-		header = base64url(raw)
 	}
 
 	signingInput := header + "." + encodedPayload
@@ -197,6 +208,9 @@ func marshalPayload(c Claims) ([]byte, error) {
 	}
 	if c.ParentToken != "" {
 		m[ClaimParentToken] = c.ParentToken
+	}
+	if c.JTI != "" {
+		m[ClaimJTI] = c.JTI
 	}
 
 	for k, v := range c.Extra {
