@@ -163,6 +163,34 @@ Use `mcp__claude_ai_Atlassian_Rovo__getTransitionsForJiraIssue` to find the
 transition ID for "Done", then call
 `mcp__claude_ai_Atlassian_Rovo__transitionJiraIssue`.
 
+### 4.7 Update jira-map.md
+
+After each Jira transition, update the corresponding row's Status column in
+`.claude/skills/work-tasks/jira-map.md` to match the new Jira status.
+
+- When transitioning to "In Progress": set Status to `In Progress`
+- When transitioning to "Done": set Status to `Done`
+- For tasks marked "skip" or "pre-existing" in the map: also transition them
+  in Jira to keep both sources aligned
+
+### 4.8 Propagate status to parent Story and Epic
+
+After transitioning a subtask, check whether the parent Story and Epic need
+updating:
+
+1. **Parent Story** (from the subtask's `parent` field):
+   - If **all** sibling subtasks are now "Done" → transition Story to "Done"
+   - Else if **any** sibling subtask is "In Progress" or "Done" and Story is
+     still "To Do" → transition Story to "In Progress"
+2. **Parent Epic** (from the Story's Epic link in jira-map.md):
+   - If **all** Stories in the Epic are "Done" → transition Epic to "Done"
+   - Else if **any** Story is "In Progress" or "Done" and Epic is still
+     "To Do" → transition Epic to "In Progress"
+
+Use `searchJiraIssuesUsingJql` with
+`parent = <story-key> AND issuetype = Subtask` to check sibling statuses,
+and the Epic's child stories from jira-map.md.
+
 ## Phase 5: Parallel Execution
 
 If multiple independent tasks are requested (no dependency between them):
