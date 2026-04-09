@@ -88,7 +88,7 @@ var transitions = [stateCount][]State{
 	ToolCall:         {PostToolFilter, Failed, Cancelled},
 	PostToolFilter:   {LLMContinuation, Failed, ApprovalRequired, Cancelled},
 	LLMContinuation:  {ToolDecision, Failed, ApprovalRequired, Cancelled, BudgetExceeded},
-	PostHook:         {Completed, Failed, ApprovalRequired, Cancelled},
+	PostHook:         {Completed, Failed, ApprovalRequired, Cancelled, LLMCall},
 	Completed:        nil,
 	Failed:           nil,
 	Cancelled:        nil,

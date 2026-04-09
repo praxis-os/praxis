@@ -199,7 +199,7 @@ func TestTransitionsLLMContinuation(t *testing.T) {
 
 func TestTransitionsPostHook(t *testing.T) {
 	got := Transitions(PostHook)
-	want := []State{Completed, Failed, ApprovalRequired, Cancelled}
+	want := []State{Completed, Failed, ApprovalRequired, Cancelled, LLMCall}
 	assertStatesEqual(t, "PostHook", got, want)
 }
 
@@ -242,7 +242,6 @@ func TestIsLegalTransitionIllegal(t *testing.T) {
 		{Completed, Failed},
 		{Failed, Created},
 		{Cancelled, Initializing},
-		{PostHook, LLMCall},
 		{ToolCall, LLMCall},
 	}
 	for _, tt := range illegal {

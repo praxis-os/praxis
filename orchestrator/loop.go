@@ -95,7 +95,7 @@ func (o *Orchestrator) runLoop(
 	emit(event.EventTypePreHookStarted, state.PreHook)
 
 	// Pre-invocation policy hook evaluation.
-	preResult, preAuditNote := o.evaluatePolicy(ctx, machine, sink, emit, emitTerminal, hooks.PhasePreInvocation, hooks.PolicyInput{
+	preResult, preAuditNote, _ := o.evaluatePolicy(ctx, machine, sink, emit, emitTerminal, hooks.PhasePreInvocation, hooks.PolicyInput{
 		Model:        model,
 		SystemPrompt: req.SystemPrompt,
 		Messages:     req.Messages,
@@ -163,7 +163,7 @@ func (o *Orchestrator) runIteration(
 	}
 
 	// Per-turn policy evaluation before each LLM call (PhasePreLLMInput).
-	preLLMResult, _ := o.evaluatePolicy(ctx, machine, sink, emit, emitTerminal, hooks.PhasePreLLMInput, hooks.PolicyInput{
+	preLLMResult, _, _ := o.evaluatePolicy(ctx, machine, sink, emit, emitTerminal, hooks.PhasePreLLMInput, hooks.PolicyInput{
 		InvocationID: invocationID,
 		Model:        model,
 		SystemPrompt: req.SystemPrompt,
@@ -222,7 +222,7 @@ func (o *Orchestrator) runIteration(
 		}
 
 		// Post-tool-output policy evaluation (PhasePostToolOutput).
-		postToolResult, _ := o.evaluatePolicy(ctx, machine, sink, emit, emitTerminal, hooks.PhasePostToolOutput, hooks.PolicyInput{
+		postToolResult, _, _ := o.evaluatePolicy(ctx, machine, sink, emit, emitTerminal, hooks.PhasePostToolOutput, hooks.PolicyInput{
 			InvocationID: invocationID,
 			Model:        model,
 			SystemPrompt: req.SystemPrompt,
@@ -282,9 +282,9 @@ func (o *Orchestrator) checkCancel(
 }
 
 // evaluatePolicy runs the PolicyHook at the given phase and handles the
-// 4 verdicts. Returns (nil, auditNote) if the invocation should continue.
-// auditNote is non-empty when the verdict is VerdictLog and Decision.Reason
-// is set; it is empty for VerdictAllow and all terminal verdicts.
+// 5 verdicts. Returns (nil, auditNote, continueLoop) if the invocation should
+// proceed. continueLoop is true only when VerdictContinue is returned at
+// PhasePostInvocation, signalling the orchestrator should force another LLM turn.
 func (o *Orchestrator) evaluatePolicy(
 	ctx context.Context,
 	machine *state.Machine,
@@ -293,7 +293,7 @@ func (o *Orchestrator) evaluatePolicy(
 	emitTerminal func(event.EventType, state.State, error),
 	phase hooks.Phase,
 	input hooks.PolicyInput,
-) (*praxis.InvocationResult, string) {
+) (*praxis.InvocationResult, string, bool) {
 	var decision hooks.Decision
 	var err error
 	func() {
@@ -306,24 +306,30 @@ func (o *Orchestrator) evaluatePolicy(
 	}()
 	if err != nil {
 		return o.failLoop(ctx, machine, sink, errors.NewSystemError(
-			fmt.Sprintf("policy hook error at %s", phase), err)), ""
+			fmt.Sprintf("policy hook error at %s", phase), err)), "", false
 	}
 
 	switch decision.Verdict {
 	case hooks.VerdictAllow:
-		return nil, ""
+		return nil, "", false
 
 	case hooks.VerdictLog:
 		slog.InfoContext(ctx, "policy hook log",
 			"phase", string(phase),
 			"reason", decision.Reason)
-		return nil, decision.Reason
+		return nil, decision.Reason, false
+
+	case hooks.VerdictContinue:
+		slog.InfoContext(ctx, "policy hook continue",
+			"phase", string(phase),
+			"reason", decision.Reason)
+		return nil, decision.Reason, phase == hooks.PhasePostInvocation
 
 	case hooks.VerdictDeny:
 		policyErr := errors.NewPolicyDeniedError(string(phase), decision.Reason)
 		_ = machine.Transition(state.Failed)
 		emitTerminal(event.EventTypeInvocationFailed, state.Failed, policyErr)
-		return &praxis.InvocationResult{FinalState: state.Failed}, ""
+		return &praxis.InvocationResult{FinalState: state.Failed}, "", false
 
 	case hooks.VerdictRequireApproval:
 		snapshot := errors.ApprovalSnapshot{
@@ -341,11 +347,11 @@ func (o *Orchestrator) evaluatePolicy(
 			Err:              errors.NewApprovalRequiredError(snapshot),
 			ApprovalSnapshot: &snapshot,
 		})
-		return &praxis.InvocationResult{FinalState: state.ApprovalRequired}, ""
+		return &praxis.InvocationResult{FinalState: state.ApprovalRequired}, "", false
 
 	default:
 		return o.failLoop(ctx, machine, sink, errors.NewSystemError(
-			fmt.Sprintf("unknown policy verdict %q at %s", decision.Verdict, phase), nil)), ""
+			fmt.Sprintf("unknown policy verdict %q at %s", decision.Verdict, phase), nil)), "", false
 	}
 }
 
@@ -465,7 +471,7 @@ func (o *Orchestrator) completeLoop(
 
 	// Post-invocation policy hook evaluation.
 	resp := llm.LLMResponse{Message: msg}
-	postResult, postAuditNote := o.evaluatePolicy(ctx, machine, sink, emit, emitTerminal, hooks.PhasePostInvocation, hooks.PolicyInput{
+	postResult, postAuditNote, continueLoop := o.evaluatePolicy(ctx, machine, sink, emit, emitTerminal, hooks.PhasePostInvocation, hooks.PolicyInput{
 		Model:        model,
 		SystemPrompt: req.SystemPrompt,
 		Messages:     req.Messages,
@@ -474,6 +480,15 @@ func (o *Orchestrator) completeLoop(
 	})
 	if postResult != nil {
 		return postResult
+	}
+
+	// VerdictContinue at PostInvocation: force another LLM turn.
+	// Transition to LLMCall; runIteration will emit the LLMCallStarted event.
+	if continueLoop {
+		if err := machine.Transition(state.LLMCall); err != nil {
+			return o.failLoop(ctx, machine, sink, errors.NewSystemError("transition to LLMCall for continue failed", err))
+		}
+		return nil // loop continues
 	}
 
 	if err := machine.Transition(state.Completed); err != nil {

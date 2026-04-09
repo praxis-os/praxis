@@ -738,3 +738,113 @@ func TestPreToolFilter_PanicRecovery(t *testing.T) {
 		t.Errorf("FinalState: want Failed, got %v", result.FinalState)
 	}
 }
+
+// --- VerdictContinue tests ---
+
+// continueOnceHook returns VerdictContinue on the first PostInvocation call,
+// then VerdictAllow on subsequent calls.
+type continueOnceHook struct {
+	calls int
+}
+
+func (h *continueOnceHook) Evaluate(_ context.Context, phase hooks.Phase, _ hooks.PolicyInput) (hooks.Decision, error) {
+	if phase == hooks.PhasePostInvocation {
+		h.calls++
+		if h.calls == 1 {
+			return hooks.Continue("need one more turn"), nil
+		}
+	}
+	return hooks.Allow(), nil
+}
+
+func TestVerdictContinue_ForcesExtraLLMTurn(t *testing.T) {
+	p := mock.New(
+		mock.Response{
+			LLMResponse: llm.LLMResponse{
+				Message: llm.Message{
+					Role:  llm.RoleAssistant,
+					Parts: []llm.MessagePart{llm.TextPart("first")},
+				},
+				StopReason: llm.StopReasonEndTurn,
+			},
+		},
+		mock.Response{
+			LLMResponse: llm.LLMResponse{
+				Message: llm.Message{
+					Role:  llm.RoleAssistant,
+					Parts: []llm.MessagePart{llm.TextPart("second")},
+				},
+				StopReason: llm.StopReasonEndTurn,
+			},
+		},
+	)
+
+	o, _ := orchestrator.New(p,
+		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithPolicyHook(&continueOnceHook{}),
+	)
+
+	result, err := o.Invoke(context.Background(), praxis.InvocationRequest{
+		Messages: userMsg("hi"),
+	})
+	if err != nil {
+		t.Fatalf("Invoke: %v", err)
+	}
+	if result.FinalState != state.Completed {
+		t.Errorf("FinalState: want Completed, got %v", result.FinalState)
+	}
+	if p.CallCount() != 2 {
+		t.Errorf("CallCount: want 2, got %d", p.CallCount())
+	}
+}
+
+func TestVerdictContinue_AtOtherPhases_BehavesLikeAllow(t *testing.T) {
+	p := mock.NewSimple("hello")
+	o, _ := orchestrator.New(p,
+		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithPolicyHook(phaseVerdictHook{
+			phase:   hooks.PhasePreInvocation,
+			verdict: hooks.Continue("should be treated as allow"),
+		}),
+	)
+
+	result, err := o.Invoke(context.Background(), praxis.InvocationRequest{
+		Messages: userMsg("hi"),
+	})
+	if err != nil {
+		t.Fatalf("Invoke: %v", err)
+	}
+	if result.FinalState != state.Completed {
+		t.Errorf("FinalState: want Completed, got %v", result.FinalState)
+	}
+	if p.CallCount() != 1 {
+		t.Errorf("CallCount: want 1, got %d", p.CallCount())
+	}
+}
+
+func TestVerdictContinue_BoundedByMaxTurns(t *testing.T) {
+	alwaysContinue := phaseVerdictHook{
+		phase:   hooks.PhasePostInvocation,
+		verdict: hooks.Continue("always continue"),
+	}
+	// Provide enough responses for maxTurns + extra.
+	p := mock.New(
+		mock.Response{LLMResponse: llm.LLMResponse{Message: llm.Message{Role: llm.RoleAssistant, Parts: []llm.MessagePart{llm.TextPart("r1")}}, StopReason: llm.StopReasonEndTurn}},
+		mock.Response{LLMResponse: llm.LLMResponse{Message: llm.Message{Role: llm.RoleAssistant, Parts: []llm.MessagePart{llm.TextPart("r2")}}, StopReason: llm.StopReasonEndTurn}},
+		mock.Response{LLMResponse: llm.LLMResponse{Message: llm.Message{Role: llm.RoleAssistant, Parts: []llm.MessagePart{llm.TextPart("r3")}}, StopReason: llm.StopReasonEndTurn}},
+		mock.Response{LLMResponse: llm.LLMResponse{Message: llm.Message{Role: llm.RoleAssistant, Parts: []llm.MessagePart{llm.TextPart("r4")}}, StopReason: llm.StopReasonEndTurn}},
+	)
+	o, _ := orchestrator.New(p,
+		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithMaxTurns(3),
+		orchestrator.WithPolicyHook(alwaysContinue),
+	)
+
+	result, _ := o.Invoke(context.Background(), praxis.InvocationRequest{
+		Messages: userMsg("hi"),
+	})
+	// Max turns exhausted — terminates in Failed.
+	if result.FinalState != state.Failed {
+		t.Errorf("FinalState: want Failed, got %v", result.FinalState)
+	}
+}

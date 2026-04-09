@@ -40,6 +40,11 @@ const (
 
 	// VerdictLog permits the operation but records an audit log entry.
 	VerdictLog Verdict = "log"
+
+	// VerdictContinue forces the orchestrator to perform an additional LLM turn
+	// instead of completing. Only meaningful at [PhasePostInvocation]; at other
+	// phases it behaves identically to [VerdictAllow].
+	VerdictContinue Verdict = "continue"
 )
 
 // Decision is the verdict returned by a [PolicyHook].
@@ -69,6 +74,10 @@ func RequireApproval(reason string, metadata map[string]any) Decision {
 
 // Log returns a Decision that permits the operation but records an audit entry.
 func Log(reason string) Decision { return Decision{Verdict: VerdictLog, Reason: reason} }
+
+// Continue returns a Decision that forces an additional LLM turn at
+// [PhasePostInvocation]. At other phases it behaves like [Allow].
+func Continue(reason string) Decision { return Decision{Verdict: VerdictContinue, Reason: reason} }
 
 // PolicyInput carries invocation state to a [PolicyHook] for evaluation.
 type PolicyInput struct {
