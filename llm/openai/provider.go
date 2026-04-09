@@ -42,11 +42,28 @@ type Provider struct {
 // The API key is sent via the Authorization: Bearer request header. Use
 // [WithBaseURL] to override the target endpoint for Azure OpenAI deployments or
 // testing.
+// defaultHTTPClient returns an HTTP client with a tuned transport for
+// concurrent workloads. The transport is cloned from http.DefaultTransport
+// to inherit sensible defaults (TLS config, dial timeouts, etc.).
+func defaultHTTPClient() *http.Client {
+	t, ok := http.DefaultTransport.(*http.Transport)
+	if !ok {
+		t = &http.Transport{}
+	}
+	tc := t.Clone()
+	tc.MaxIdleConns = 100
+	tc.MaxIdleConnsPerHost = 10
+	return &http.Client{
+		Timeout:   120 * time.Second,
+		Transport: tc,
+	}
+}
+
 func New(apiKey string, opts ...Option) *Provider {
 	p := &Provider{
 		apiKey:       apiKey,
 		baseURL:      defaultBaseURL,
-		httpClient:   &http.Client{Timeout: 120 * time.Second},
+		httpClient:   defaultHTTPClient(),
 		defaultModel: defaultModel,
 	}
 	for _, o := range opts {
@@ -132,19 +149,21 @@ func (p *Provider) Complete(ctx context.Context, req llm.LLMRequest) (llm.LLMRes
 	}
 	defer resp.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return llm.LLMResponse{}, praxiserrors.NewTransientLLMError(
-			providerName, resp.StatusCode, fmt.Errorf("reading response body: %w", err),
-		)
-	}
-
 	if resp.StatusCode != http.StatusOK {
-		return llm.LLMResponse{}, p.mapHTTPError(resp, respBody)
+		// Read a bounded body for error diagnostics (max 64 KiB).
+		errBody, err := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+		if err != nil {
+			return llm.LLMResponse{}, praxiserrors.NewTransientLLMError(
+				providerName, resp.StatusCode, fmt.Errorf("reading error body: %w", err),
+			)
+		}
+		return llm.LLMResponse{}, p.mapHTTPError(resp, errBody)
 	}
 
+	// Decode success response directly from the body stream to avoid a
+	// full-response buffer allocation.
 	var apiResp apiResponse
-	if err := json.Unmarshal(respBody, &apiResp); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
 		return llm.LLMResponse{}, praxiserrors.NewTransientLLMError(
 			providerName, resp.StatusCode, fmt.Errorf("decoding response: %w", err),
 		)
