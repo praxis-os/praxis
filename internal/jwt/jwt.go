@@ -47,6 +47,14 @@ const (
 	// ClaimParentToken is the praxis-specific parent token reference.
 	// Set when the current invocation was spawned by a parent invocation.
 	ClaimParentToken = "praxis.parent_token"
+
+	// ClaimJTI is the "jti" registered claim (RFC 7519 §4.1.7).
+	// Value is a unique identifier for the token (typically UUIDv7).
+	ClaimJTI = "jti"
+
+	// ClaimToolName is the praxis-specific tool name claim.
+	// Identifies the tool for which this identity token was issued.
+	ClaimToolName = "praxis.tool_name"
 )
 
 // fixedHeader is the pre-encoded base64url representation of
