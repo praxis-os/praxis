@@ -7,6 +7,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"time"
 
@@ -73,16 +74,25 @@ func WithExtraClaims(claims map[string]any) SignerOption {
 
 // ed25519Signer implements Signer using Ed25519-signed JWTs.
 type ed25519Signer struct {
-	key           ed25519.PrivateKey
-	issuer        string
-	audience      []string
-	keyID         string
-	tokenLifetime time.Duration
-	extraClaims   map[string]any
+	extraClaims    map[string]any
+	issuer         string
+	keyID          string
+	cachedKidHeader string // pre-encoded base64url header with kid, computed at construction
+	key            ed25519.PrivateKey
+	audience       []string
+	tokenLifetime  time.Duration
 }
 
 // ed25519KeySize is the expected length (in bytes) of an Ed25519 private key.
 const ed25519KeySize = ed25519.PrivateKeySize // 64
+
+// claimNamedKeys is the set of JWT claim keys that map to named fields on
+// jwt.Claims. Used to filter Extra claims without allocating a map per Sign call.
+var claimNamedKeys = map[string]struct{}{
+	jwt.ClaimIssuer: {}, jwt.ClaimSubject: {}, jwt.ClaimAudience: {},
+	jwt.ClaimExpiration: {}, jwt.ClaimIssuedAt: {}, jwt.ClaimJTI: {},
+	jwt.ClaimInvocationID: {}, jwt.ClaimToolName: {}, jwt.ClaimParentToken: {},
+}
 
 // Token lifetime constants per D72.
 
@@ -132,6 +142,12 @@ func NewEd25519Signer(key ed25519.PrivateKey, opts ...SignerOption) (Signer, err
 		}
 	}
 
+	// Pre-compute the kid header at construction time so Encode
+	// doesn't rebuild and base64url-encode it on every Sign call.
+	if s.keyID != "" {
+		s.cachedKidHeader = jwt.EncodeKidHeader(s.keyID)
+	}
+
 	return s, nil
 }
 
@@ -171,31 +187,30 @@ func (s *ed25519Signer) Sign(_ context.Context, claims map[string]any) (string, 
 		parentToken = pt
 	}
 
-	// Build Extra: incoming claims → configured extra.
-	// Mandatory claim keys set as named fields on jwt.Claims are stripped
-	// to prevent Extra from overwriting them in marshalPayload.
-	extra := make(map[string]any, len(claims)+len(s.extraClaims)+1)
-
-	for k, v := range claims {
-		extra[k] = v
-	}
-	for k, v := range s.extraClaims {
-		extra[k] = v
+	// Build Extra lazily: only allocate when non-standard claims exist.
+	// Keys that map to named fields on jwt.Claims are stripped to prevent
+	// Extra from overwriting them in marshalPayload.
+	unknownCount := 0
+	for k := range claims {
+		if _, named := claimNamedKeys[k]; !named {
+			unknownCount++
+		}
 	}
 
-	// Remove keys that are set as named fields on jwt.Claims.
-	delete(extra, jwt.ClaimIssuer)
-	delete(extra, jwt.ClaimSubject)
-	delete(extra, jwt.ClaimAudience)
-	delete(extra, jwt.ClaimExpiration)
-	delete(extra, jwt.ClaimIssuedAt)
-	delete(extra, jwt.ClaimInvocationID)
-	delete(extra, jwt.ClaimToolName)
-	delete(extra, jwt.ClaimParentToken)
-
-	// jti is added after cleanup — it is signer-generated and must always
-	// be present, overriding any incoming value.
-	extra[jwt.ClaimJTI] = jti
+	var extra map[string]any
+	if unknownCount+len(s.extraClaims) > 0 {
+		extra = make(map[string]any, unknownCount+len(s.extraClaims))
+		for k, v := range claims {
+			if _, named := claimNamedKeys[k]; !named {
+				extra[k] = v
+			}
+		}
+		for k, v := range s.extraClaims {
+			if _, named := claimNamedKeys[k]; !named {
+				extra[k] = v
+			}
+		}
+	}
 
 	jwtClaims := jwt.Claims{
 		Issuer:       s.issuer,
@@ -206,10 +221,15 @@ func (s *ed25519Signer) Sign(_ context.Context, claims map[string]any) (string, 
 		InvocationID: invocationID,
 		ToolName:     toolName,
 		ParentToken:  parentToken,
+		JTI:          jti,
 		Extra:        extra,
 	}
 
-	return jwt.Encode(jwtClaims, s.key, s.keyID)
+	header := jwt.FixedHeader()
+	if s.cachedKidHeader != "" {
+		header = s.cachedKidHeader
+	}
+	return jwt.EncodeWithHeader(jwtClaims, s.key, header)
 }
 
 // validateTokenLifetime checks that d is within [MinTokenLifetime, MaxTokenLifetime].
@@ -234,7 +254,7 @@ func generateUUIDv7(now time.Time) (string, error) {
 	// Bytes 0–5: 48-bit big-endian Unix millisecond timestamp.
 	ms := uint64(now.UnixMilli())
 	binary.BigEndian.PutUint16(uuid[0:2], uint16(ms>>32)) //nolint:gosec // 48-bit timestamp fits after shift
-	binary.BigEndian.PutUint32(uuid[2:6], uint32(ms))   //nolint:gosec // lower 32 bits of 48-bit timestamp
+	binary.BigEndian.PutUint32(uuid[2:6], uint32(ms))     //nolint:gosec // lower 32 bits of 48-bit timestamp
 
 	// Bytes 6–15: random, then set version and variant.
 	if _, err := rand.Read(uuid[6:]); err != nil {
@@ -247,6 +267,17 @@ func generateUUIDv7(now time.Time) (string, error) {
 	// Variant 10: high 2 bits of byte 8 = 10.
 	uuid[8] = (uuid[8] & 0x3F) | 0x80
 
-	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
-		uuid[0:4], uuid[4:6], uuid[6:8], uuid[8:10], uuid[10:16]), nil
+	// Format as xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx using stack-allocated
+	// buffer to avoid fmt.Sprintf overhead.
+	var buf [36]byte
+	hex.Encode(buf[0:8], uuid[0:4])
+	buf[8] = '-'
+	hex.Encode(buf[9:13], uuid[4:6])
+	buf[13] = '-'
+	hex.Encode(buf[14:18], uuid[6:8])
+	buf[18] = '-'
+	hex.Encode(buf[19:23], uuid[8:10])
+	buf[23] = '-'
+	hex.Encode(buf[24:36], uuid[10:16])
+	return string(buf[:]), nil
 }

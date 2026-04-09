@@ -4,10 +4,12 @@ package orchestrator_test
 
 import (
 	"context"
+	"crypto/ed25519"
 	"testing"
 	"time"
 
 	"github.com/praxis-os/praxis"
+	"github.com/praxis-os/praxis/identity"
 	"github.com/praxis-os/praxis/llm"
 	"github.com/praxis-os/praxis/llm/mock"
 	"github.com/praxis-os/praxis/orchestrator"
@@ -38,6 +40,59 @@ func BenchmarkOrchestratorOverhead(b *testing.B) {
 	o, err := orchestrator.New(
 		mock.New(responses...),
 		orchestrator.WithDefaultModel("bench-model"),
+	)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	req := praxis.InvocationRequest{
+		Messages: []llm.Message{
+			{Role: llm.RoleUser, Parts: []llm.MessagePart{llm.TextPart("hi")}},
+		},
+	}
+
+	ctx := context.Background()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = o.Invoke(ctx, req)
+	}
+}
+
+// BenchmarkOrchestratorOverheadWithIdentity measures orchestrator overhead
+// with a real Ed25519 identity signer wired in. This separates "framework
+// overhead" from "framework + signing overhead" for regression tracking.
+//
+// Run:
+//
+//	go test -run '^$' -bench BenchmarkOrchestratorOverheadWithIdentity -benchmem -count=6
+func BenchmarkOrchestratorOverheadWithIdentity(b *testing.B) {
+	_, priv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		b.Fatalf("generate key: %v", err)
+	}
+	signer, err := identity.NewEd25519Signer(priv)
+	if err != nil {
+		b.Fatalf("NewEd25519Signer: %v", err)
+	}
+
+	responses := make([]mock.Response, b.N)
+	for i := range responses {
+		responses[i] = mock.Response{
+			LLMResponse: llm.LLMResponse{
+				Message: llm.Message{
+					Role:  llm.RoleAssistant,
+					Parts: []llm.MessagePart{llm.TextPart("ok")},
+				},
+				StopReason: llm.StopReasonEndTurn,
+				Usage:      llm.TokenUsage{InputTokens: 5, OutputTokens: 1},
+			},
+		}
+	}
+
+	o, err := orchestrator.New(
+		mock.New(responses...),
+		orchestrator.WithDefaultModel("bench-model"),
+		orchestrator.WithIdentitySigner(signer),
 	)
 	if err != nil {
 		b.Fatal(err)

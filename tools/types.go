@@ -59,19 +59,9 @@ type ToolResult struct {
 // tracking, tracing, and identity propagation without needing a direct
 // reference to the orchestrator.
 type InvocationContext struct {
-	// InvocationID is the unique identifier for the current invocation.
-	InvocationID string
-
-	// Budget is a snapshot of the current budget consumption.
-	Budget budget.BudgetSnapshot
-
-	// SpanContext is the OpenTelemetry span context for the current invocation.
-	SpanContext trace.SpanContext
-
-	// SignedIdentity is the signed identity token for the current invocation,
-	// if identity signing is configured. Empty otherwise.
+	Metadata       map[string]string
+	Budget         budget.BudgetSnapshot
+	InvocationID   string
 	SignedIdentity string
-
-	// Metadata is caller-supplied key-value pairs from the InvocationRequest.
-	Metadata map[string]string
+	SpanContext    trace.SpanContext
 }

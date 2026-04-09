@@ -67,23 +67,9 @@ type Provider interface {
 // Capabilities is a snapshot of a provider's supported features.
 // Returned by [Provider.Capabilities]; immutable for the provider's lifetime.
 type Capabilities struct {
-	// SupportsStreaming reports whether the provider's LLM API supports
-	// token-by-token streaming.
-	SupportsStreaming bool
-
-	// SupportsParallelToolCalls reports whether the provider returns
-	// multiple tool calls in a single response.
+	SupportedStopReasons      []StopReason
+	MaxContextTokens          int64
+	SupportsStreaming         bool
 	SupportsParallelToolCalls bool
-
-	// SupportsSystemPrompt reports whether the provider accepts a
-	// system-level prompt separate from the message list.
-	SupportsSystemPrompt bool
-
-	// SupportedStopReasons is the set of StopReason values this provider
-	// may return.
-	SupportedStopReasons []StopReason
-
-	// MaxContextTokens is the provider-reported context window size.
-	// Zero means unreported or unknown.
-	MaxContextTokens int64
+	SupportsSystemPrompt      bool
 }

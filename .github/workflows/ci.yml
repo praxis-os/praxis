@@ -263,7 +263,7 @@ jobs:
           key: bench-main-${{ github.sha }}
           restore-keys: bench-main-
       - name: Run benchmarks
-        run: go test -bench=. -benchmem -count=5 ./... | tee bench-new.txt
+        run: go test -bench=. -benchmem -count=10 ./... | tee bench-new.txt
       - name: Install benchstat
         run: go install golang.org/x/perf/cmd/benchstat@latest
       - name: Compare with baseline

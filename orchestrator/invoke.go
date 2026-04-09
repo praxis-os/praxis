@@ -19,7 +19,13 @@ func runInvocation(
 	maxTurns int,
 	req praxis.InvocationRequest,
 ) (*praxis.InvocationResult, error) {
-	var events []event.InvocationEvent
+	// Preallocate event buffer: a no-tool invocation emits ~8 events;
+	// tool paths emit more.
+	eventCap := 8
+	if len(req.Tools) > 0 {
+		eventCap = 16
+	}
+	events := make([]event.InvocationEvent, 0, eventCap)
 	var terminalErr error
 
 	sink := func(_ context.Context, e event.InvocationEvent) {

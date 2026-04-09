@@ -15,8 +15,8 @@ func TestNullSigner_ImplementsSigner(_ *testing.T) {
 
 func TestNullSigner_Sign(t *testing.T) {
 	tests := []struct {
-		name   string
 		claims map[string]any
+		name   string
 	}{
 		{
 			name:   "nil claims",
