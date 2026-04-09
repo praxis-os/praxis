@@ -216,7 +216,7 @@ func (redactingPostToolFilter) Filter(_ context.Context, result tools.ToolResult
 	modified := result
 	modified.Content = "[REDACTED]"
 	return modified, []hooks.FilterDecision{
-		{Action: hooks.FilterActionRedact, Field: "content", Reason: "sensitive data"},
+		{Action: hooks.FilterActionRedact, Field: "content", Reason: "pii: email address found"},
 	}, nil
 }
 

@@ -15,6 +15,7 @@ import (
 	"github.com/praxis-os/praxis/hooks"
 	"github.com/praxis-os/praxis/llm"
 	"github.com/praxis-os/praxis/state"
+	"github.com/praxis-os/praxis/telemetry"
 	"github.com/praxis-os/praxis/tools"
 )
 
@@ -320,18 +321,23 @@ func (o *Orchestrator) applyPreLLMFilter(
 	}
 
 	for _, d := range decisions {
+		// Emit content-analysis events before any state transition (D59 §2.3).
+		for _, evtType := range telemetry.ClassifyFilterDecision(d) {
+			sink(ctx, event.InvocationEvent{
+				Type:         evtType,
+				State:        machine.State(),
+				At:           time.Now(),
+				FilterPhase:  "pre_llm",
+				FilterField:  d.Field,
+				FilterReason: d.Reason,
+				FilterAction: string(d.Action),
+			})
+		}
 		if d.Action == hooks.FilterActionBlock {
 			sysErr := errors.NewPolicyDeniedError("pre_llm_input", d.Reason)
 			_ = machine.Transition(state.Failed)
 			emitTerminal(event.EventTypeInvocationFailed, state.Failed, sysErr)
 			return nil, &praxis.InvocationResult{FinalState: state.Failed}
-		}
-		if d.Action == hooks.FilterActionRedact {
-			sink(ctx, event.InvocationEvent{
-				Type:  event.EventTypePIIRedacted,
-				State: machine.State(),
-				At:    time.Now(),
-			})
 		}
 	}
 
@@ -513,13 +519,20 @@ func (o *Orchestrator) handleToolCallsWithEvents(
 			return llm.Message{}, errors.NewSystemError("post-tool filter error", filterErr)
 		}
 		for _, d := range decisions {
+			// Emit content-analysis events before any state transition (D59 §2.3).
+			for _, evtType := range telemetry.ClassifyFilterDecision(d) {
+				sink(ctx, event.InvocationEvent{
+					Type:         evtType,
+					State:        state.PostToolFilter,
+					At:           time.Now(),
+					FilterPhase:  "post_tool",
+					FilterField:  d.Field,
+					FilterReason: d.Reason,
+					FilterAction: string(d.Action),
+				})
+			}
 			if d.Action == hooks.FilterActionBlock {
 				return llm.Message{}, errors.NewPolicyDeniedError("post_tool_output", d.Reason)
-			}
-			if d.Action == hooks.FilterActionRedact {
-				sink(ctx, event.InvocationEvent{
-					Type: event.EventTypePIIRedacted, State: state.PostToolFilter, At: time.Now(),
-				})
 			}
 		}
 		resultParts = append(resultParts, llm.ToolResultPart(&llm.LLMToolResult{

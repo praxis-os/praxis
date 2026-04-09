@@ -57,4 +57,21 @@ type InvocationEvent struct {
 	// or filters to provide audit trail context for this event. It is empty when
 	// no annotation was provided.
 	AuditNote string
+
+	// FilterPhase is the filter chain phase that produced this event.
+	// Non-empty only on EventTypePIIRedacted and EventTypePromptInjectionSuspected.
+	// Values: "pre_llm" (from PreLLMFilter), "post_tool" (from PostToolFilter).
+	FilterPhase string
+
+	// FilterField is the dot-path to the content element acted on.
+	// Non-empty only on content-analysis events.
+	FilterField string
+
+	// FilterReason is the human-readable reason from the FilterDecision.
+	// Non-empty only on content-analysis events.
+	FilterReason string
+
+	// FilterAction is the FilterAction string value from the FilterDecision.
+	// Non-empty only on content-analysis events.
+	FilterAction string
 }
