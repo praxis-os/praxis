@@ -79,11 +79,14 @@ func (o *Orchestrator) runLoop(
 	// Enrich telemetry attributes (D60). Called once at Initializing; the
 	// returned map is attached to every subsequent event. The first event
 	// (InvocationStarted) has nil EnricherAttributes by design.
-	enricherAttrs := o.attributeEnricher.Enrich(ctx)
-	originalSink := sink
-	sink = func(ctx context.Context, e event.InvocationEvent) {
-		e.EnricherAttributes = enricherAttrs
-		originalSink(ctx, e)
+	// When the enricher returns nil or empty (e.g. NullEnricher), skip the
+	// wrapper to avoid a closure allocation on the common no-enricher path.
+	if enricherAttrs := o.attributeEnricher.Enrich(ctx); len(enricherAttrs) > 0 {
+		originalSink := sink
+		sink = func(ctx context.Context, e event.InvocationEvent) {
+			e.EnricherAttributes = enricherAttrs
+			originalSink(ctx, e)
+		}
 	}
 
 	// Sign identity token at Initializing (D73). Claims include the

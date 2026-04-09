@@ -16,10 +16,10 @@ func TestNullInvoker_ImplementsInvoker(_ *testing.T) {
 func TestNullInvoker_Invoke(t *testing.T) {
 	tests := []struct {
 		name        string
-		call        tools.ToolCall
 		wantCallID  string
 		wantContent string
 		wantStatus  tools.ToolStatus
+		call        tools.ToolCall
 		wantErr     bool
 	}{
 		{

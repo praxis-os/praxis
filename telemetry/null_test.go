@@ -42,10 +42,7 @@ func TestNullEnricher_Enrich(t *testing.T) {
 	enricher := telemetry.NullEnricher{}
 
 	got := enricher.Enrich(context.Background())
-	if got == nil {
-		t.Error("Enrich() returned nil, want empty map")
-	}
-	if len(got) != 0 {
-		t.Errorf("Enrich() returned %d entries, want 0", len(got))
+	if got != nil {
+		t.Errorf("Enrich() returned %v, want nil", got)
 	}
 }

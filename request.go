@@ -12,43 +12,12 @@ import (
 // The zero value is valid for fields marked optional; the orchestrator applies
 // defaults for any zero-valued optional field before the first LLM call.
 type InvocationRequest struct {
-	// Messages is the conversation history passed to the LLM on the first
-	// round-trip. Required; must contain at least one message.
-	Messages []llm.Message
-
-	// Model is the provider-specific model identifier (e.g. "claude-3-5-sonnet-20241022").
-	// Required; the orchestrator returns an error if empty.
-	Model string
-
-	// Tools is the set of tool definitions made available to the LLM.
-	// Optional; nil or empty means the LLM receives no tool definitions.
-	Tools []llm.ToolDefinition
-
-	// SystemPrompt is the system prompt prepended to each LLM call.
-	// Optional; empty means no system prompt.
+	Metadata     map[string]string
+	Model        string
 	SystemPrompt string
-
-	// BudgetConfig holds the budget limits for this invocation.
-	// Optional; zero value means no budget limits.
+	ParentToken  string
+	Messages     []llm.Message
+	Tools        []llm.ToolDefinition
 	BudgetConfig budget.Config
-
-	// Metadata is caller-supplied key-value pairs attached to this invocation.
-	// The orchestrator forwards Metadata to hooks and telemetry enrichers but
-	// does not interpret the values itself. Optional; nil is treated as empty.
-	Metadata map[string]string
-
-	// MaxTurns caps the number of LLM round-trips (including tool-use
-	// loops) for this invocation. Optional; zero means use the orchestrator's
-	// configured default.
-	MaxTurns int
-
-	// ParentToken is the signed identity token from the outer (parent)
-	// invocation, used for identity chaining (D75). When a nested
-	// orchestrator is invoked from within a tool, the outer invocation's
-	// SignedIdentity should be passed here so the inner token includes a
-	// praxis.parent_token claim linking child to parent.
-	//
-	// Optional; empty means no parent token (root invocation).
-	// Chain depth is documented at max 3 levels but not enforced.
-	ParentToken string
+	MaxTurns     int
 }
