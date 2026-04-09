@@ -57,7 +57,7 @@ func (s *sequenceInvoker) Invoke(_ context.Context, _ tools.InvocationContext, c
 }
 
 func ptCallID(i int) string {
-	return "pt-call-" + string(rune('0'+i))
+	return "pt-call-" + string(rune('0'+i)) //nolint:gosec // test-only, i is always 0-9
 }
 
 // ptToolCalls builds N LLMToolCall pointers for parallel tool dispatch tests.
