@@ -74,16 +74,25 @@ func WithExtraClaims(claims map[string]any) SignerOption {
 
 // ed25519Signer implements Signer using Ed25519-signed JWTs.
 type ed25519Signer struct {
-	extraClaims   map[string]any
-	issuer        string
-	keyID         string
-	key           ed25519.PrivateKey
-	audience      []string
-	tokenLifetime time.Duration
+	extraClaims    map[string]any
+	issuer         string
+	keyID          string
+	cachedKidHeader string // pre-encoded base64url header with kid, computed at construction
+	key            ed25519.PrivateKey
+	audience       []string
+	tokenLifetime  time.Duration
 }
 
 // ed25519KeySize is the expected length (in bytes) of an Ed25519 private key.
 const ed25519KeySize = ed25519.PrivateKeySize // 64
+
+// claimNamedKeys is the set of JWT claim keys that map to named fields on
+// jwt.Claims. Used to filter Extra claims without allocating a map per Sign call.
+var claimNamedKeys = map[string]struct{}{
+	jwt.ClaimIssuer: {}, jwt.ClaimSubject: {}, jwt.ClaimAudience: {},
+	jwt.ClaimExpiration: {}, jwt.ClaimIssuedAt: {}, jwt.ClaimJTI: {},
+	jwt.ClaimInvocationID: {}, jwt.ClaimToolName: {}, jwt.ClaimParentToken: {},
+}
 
 // Token lifetime constants per D72.
 
@@ -133,6 +142,12 @@ func NewEd25519Signer(key ed25519.PrivateKey, opts ...SignerOption) (Signer, err
 		}
 	}
 
+	// Pre-compute the kid header at construction time so Encode
+	// doesn't rebuild and base64url-encode it on every Sign call.
+	if s.keyID != "" {
+		s.cachedKidHeader = jwt.EncodeKidHeader(s.keyID)
+	}
+
 	return s, nil
 }
 
@@ -175,16 +190,9 @@ func (s *ed25519Signer) Sign(_ context.Context, claims map[string]any) (string, 
 	// Build Extra lazily: only allocate when non-standard claims exist.
 	// Keys that map to named fields on jwt.Claims are stripped to prevent
 	// Extra from overwriting them in marshalPayload.
-	namedKeys := map[string]struct{}{
-		jwt.ClaimIssuer: {}, jwt.ClaimSubject: {}, jwt.ClaimAudience: {},
-		jwt.ClaimExpiration: {}, jwt.ClaimIssuedAt: {}, jwt.ClaimJTI: {},
-		jwt.ClaimInvocationID: {}, jwt.ClaimToolName: {}, jwt.ClaimParentToken: {},
-	}
-
-	// Count unknown keys in incoming claims.
 	unknownCount := 0
 	for k := range claims {
-		if _, named := namedKeys[k]; !named {
+		if _, named := claimNamedKeys[k]; !named {
 			unknownCount++
 		}
 	}
@@ -193,12 +201,12 @@ func (s *ed25519Signer) Sign(_ context.Context, claims map[string]any) (string, 
 	if unknownCount+len(s.extraClaims) > 0 {
 		extra = make(map[string]any, unknownCount+len(s.extraClaims))
 		for k, v := range claims {
-			if _, named := namedKeys[k]; !named {
+			if _, named := claimNamedKeys[k]; !named {
 				extra[k] = v
 			}
 		}
 		for k, v := range s.extraClaims {
-			if _, named := namedKeys[k]; !named {
+			if _, named := claimNamedKeys[k]; !named {
 				extra[k] = v
 			}
 		}
@@ -217,7 +225,11 @@ func (s *ed25519Signer) Sign(_ context.Context, claims map[string]any) (string, 
 		Extra:        extra,
 	}
 
-	return jwt.Encode(jwtClaims, s.key, s.keyID)
+	header := jwt.FixedHeader()
+	if s.cachedKidHeader != "" {
+		header = s.cachedKidHeader
+	}
+	return jwt.EncodeWithHeader(jwtClaims, s.key, header)
 }
 
 // validateTokenLifetime checks that d is within [MinTokenLifetime, MaxTokenLifetime].

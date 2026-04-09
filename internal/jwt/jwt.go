@@ -13,6 +13,7 @@
 package jwt
 
 import (
+	"crypto"
 	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
@@ -137,36 +138,46 @@ type Claims struct {
 // An error is returned if JSON marshalling of the payload fails or if
 // ed25519.Sign returns an error (the latter is only possible with a malformed
 // key).
+// EncodeKidHeader returns the base64url-encoded JWT header for the given keyID.
+// Callers that sign many tokens with the same keyID should call this once at
+// construction and pass the result to EncodeWithHeader to avoid per-call overhead.
+func EncodeKidHeader(keyID string) string {
+	if !strings.ContainsAny(keyID, `"\`) {
+		return base64url([]byte(`{"alg":"EdDSA","kid":"` + keyID + `","typ":"JWT"}`))
+	}
+	h := map[string]string{"alg": "EdDSA", "typ": "JWT", "kid": keyID}
+	raw, _ := json.Marshal(h) // map[string]string marshal never fails
+	return base64url(raw)
+}
+
+// Encode signs claims with key and returns a compact JWT string of the form
+// "base64url(header).base64url(payload).base64url(signature)".
+//
+// If keyID is non-empty, a kid header is computed per call. For better
+// performance with a stable keyID, pre-compute with EncodeKidHeader and
+// use EncodeWithHeader instead.
 func Encode(claims Claims, key ed25519.PrivateKey, keyID string) (string, error) {
+	header := fixedHeader
+	if keyID != "" {
+		header = EncodeKidHeader(keyID)
+	}
+	return EncodeWithHeader(claims, key, header)
+}
+
+// EncodeWithHeader signs claims with key using a pre-computed base64url header.
+// Use fixedHeader (no kid) or a cached EncodeKidHeader result.
+func EncodeWithHeader(claims Claims, key ed25519.PrivateKey, header string) (string, error) {
 	payload, err := marshalPayload(claims)
 	if err != nil {
 		return "", fmt.Errorf("jwt: marshal payload: %w", err)
 	}
 
 	encodedPayload := base64url(payload)
-
-	header := fixedHeader
-	if keyID != "" {
-		// Fast path: build header via string concatenation when keyID
-		// contains no characters requiring JSON escaping.
-		if !strings.ContainsAny(keyID, `"\`) {
-			header = base64url([]byte(`{"alg":"EdDSA","kid":"` + keyID + `","typ":"JWT"}`))
-		} else {
-			h := map[string]string{"alg": "EdDSA", "typ": "JWT", "kid": keyID}
-			raw, err := json.Marshal(h)
-			if err != nil {
-				return "", fmt.Errorf("jwt: marshal header: %w", err)
-			}
-			header = base64url(raw)
-		}
-	}
-
 	signingInput := header + "." + encodedPayload
 
-	// Ed25519 requires crypto.Hash(0) (no pre-hashing). rand is ignored by
-	// the ed25519 implementation and may be nil.
-	opts := &ed25519.Options{}
-	sig, err := key.Sign(nil, []byte(signingInput), opts)
+	// Ed25519 requires crypto.Hash(0) (no pre-hashing). Using crypto.Hash(0)
+	// directly avoids a heap allocation for &ed25519.Options{}.
+	sig, err := key.Sign(nil, []byte(signingInput), crypto.Hash(0))
 	if err != nil {
 		return "", fmt.Errorf("jwt: sign: %w", err)
 	}
@@ -174,10 +185,64 @@ func Encode(claims Claims, key ed25519.PrivateKey, keyID string) (string, error)
 	return signingInput + "." + base64url(sig), nil
 }
 
+// FixedHeader returns the pre-encoded base64url header without a kid field.
+func FixedHeader() string { return fixedHeader }
+
+// payloadStruct is used for struct-based JSON encoding on the common path
+// (no Extra claims). Struct marshaling avoids map allocation and reflection-
+// heavy json.mapEncoder, saving ~3 allocs per token.
+type payloadStruct struct {
+	Issuer       string `json:"iss,omitempty"`
+	Subject      string `json:"sub,omitempty"`
+	Audience     any    `json:"aud,omitempty"`
+	Expiration   int64  `json:"exp,omitempty"`
+	IssuedAt     int64  `json:"iat,omitempty"`
+	InvocationID string `json:"praxis.invocation_id,omitempty"`
+	ToolName     string `json:"praxis.tool_name,omitempty"`
+	ParentToken  string `json:"praxis.parent_token,omitempty"`
+	JTI          string `json:"jti,omitempty"`
+}
+
 // marshalPayload converts Claims into a JSON byte slice suitable for base64url
-// encoding. The registered claims are serialised first, then Extra claims are
-// merged in. Extra keys overwrite registered claims on collision.
+// encoding. When no Extra claims are present, uses struct-based encoding to
+// avoid map allocation and reflection overhead. When Extra claims exist, falls
+// back to map-based encoding where Extra keys overwrite named claims on collision.
 func marshalPayload(c Claims) ([]byte, error) {
+	if len(c.Extra) == 0 {
+		return marshalPayloadStruct(c)
+	}
+	return marshalPayloadMap(c)
+}
+
+// marshalPayloadStruct encodes claims using a typed struct (fast path).
+func marshalPayloadStruct(c Claims) ([]byte, error) {
+	p := payloadStruct{
+		Issuer:       c.Issuer,
+		Subject:      c.Subject,
+		InvocationID: c.InvocationID,
+		ToolName:     c.ToolName,
+		ParentToken:  c.ParentToken,
+		JTI:          c.JTI,
+	}
+	switch len(c.Audience) {
+	case 1:
+		p.Audience = c.Audience[0]
+	default:
+		if len(c.Audience) > 0 {
+			p.Audience = c.Audience
+		}
+	}
+	if !c.Expiration.IsZero() {
+		p.Expiration = c.Expiration.Unix()
+	}
+	if !c.IssuedAt.IsZero() {
+		p.IssuedAt = c.IssuedAt.Unix()
+	}
+	return json.Marshal(p)
+}
+
+// marshalPayloadMap encodes claims using a dynamic map (fallback for Extra claims).
+func marshalPayloadMap(c Claims) ([]byte, error) {
 	m := make(map[string]any, 7+len(c.Extra))
 
 	if c.Issuer != "" {
