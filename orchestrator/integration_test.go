@@ -111,7 +111,7 @@ type recordingResolver struct {
 	calls atomic.Int32
 }
 
-func (r *recordingResolver) Fetch(_ context.Context, name string) (credentials.Credential, error) {
+func (r *recordingResolver) Fetch(_ context.Context, _ string) (credentials.Credential, error) {
 	r.calls.Add(1)
 	return credentials.Credential{Value: []byte("test-secret")}, nil
 }

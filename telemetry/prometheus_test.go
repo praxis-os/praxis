@@ -44,9 +44,9 @@ func TestNewPrometheusRecorder_NilPanics(t *testing.T) {
 	telemetry.NewPrometheusRecorder(nil)
 }
 
-func TestNewPrometheusRecorder_ImplementsMetricsRecorder(t *testing.T) {
+func TestNewPrometheusRecorder_ImplementsMetricsRecorder(_ *testing.T) {
 	reg := prometheus.NewRegistry()
-	var _ telemetry.MetricsRecorder = telemetry.NewPrometheusRecorder(reg)
+	var _ telemetry.MetricsRecorder = telemetry.NewPrometheusRecorder(reg) //nolint:staticcheck // compile-time interface check
 }
 
 func TestPrometheusRecorder_RecordInvocation(t *testing.T) {

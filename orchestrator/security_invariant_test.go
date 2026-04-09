@@ -734,7 +734,7 @@ func TestSecurityInvariant_T5_PanicInPolicyHookIsRecovered(t *testing.T) {
 // TestSecurityInvariant_T5_PanicInPreLLMFilterIsRecovered verifies D78/T5:
 // a panic in PreLLMFilter.Filter is recovered.
 func TestSecurityInvariant_T5_PanicInPreLLMFilterIsRecovered(t *testing.T) {
-	panicFilter := preLLMFilterFunc(func(_ context.Context, msgs []llm.Message) ([]llm.Message, []hooks.FilterDecision, error) {
+	panicFilter := preLLMFilterFunc(func(_ context.Context, _ []llm.Message) ([]llm.Message, []hooks.FilterDecision, error) {
 		panic("pre-LLM filter exploded")
 	})
 

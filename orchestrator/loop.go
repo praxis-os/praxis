@@ -522,7 +522,7 @@ func (o *Orchestrator) completeLoop(
 // and post-tool filter chain. Returns the assembled tool-result message,
 // the last filtered tool result (for PhasePostToolOutput policy input),
 // and any error.
-func (o *Orchestrator) handleToolCallsWithEvents(
+func (o *Orchestrator) handleToolCallsWithEvents( //nolint:gocyclo // tool dispatch with filter chains is inherently complex
 	ctx context.Context,
 	msg llm.Message,
 	machine *state.Machine,

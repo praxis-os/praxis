@@ -8,7 +8,7 @@ import (
 	"github.com/praxis-os/praxis/llm"
 )
 
-func TestToAssistantMessages(t *testing.T) {
+func TestToAssistantMessages(t *testing.T) { //nolint:gocyclo // table-driven test
 	tests := []struct {
 		name      string
 		msg       llm.Message
@@ -333,7 +333,7 @@ func TestToAPIMessages_Dispatch(t *testing.T) {
 	}
 }
 
-func TestToAPIRequest_Variants(t *testing.T) {
+func TestToAPIRequest_Variants(t *testing.T) { //nolint:gocyclo // table-driven test
 	t.Run("default_model_fallback", func(t *testing.T) {
 		req := llm.LLMRequest{
 			Model:    "",

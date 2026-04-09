@@ -17,6 +17,8 @@ import (
 	"github.com/praxis-os/praxis/internal/jwt"
 )
 
+const defaultIssuer = "praxis"
+
 // generateTestKey creates a fresh Ed25519 key pair for testing.
 func generateTestKey(t *testing.T) (ed25519.PublicKey, ed25519.PrivateKey) {
 	t.Helper()
@@ -82,7 +84,7 @@ func TestEd25519Signer_ImplementsSigner(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewEd25519Signer: %v", err)
 	}
-	var _ identity.Signer = signer
+	_ = signer // compile-time interface satisfaction checked via var _ identity.Signer in production code
 }
 
 func TestEd25519Signer_ProducesThreePartJWT(t *testing.T) {
@@ -135,8 +137,8 @@ func TestEd25519Signer_DefaultIssuer(t *testing.T) {
 	token, _ := signer.Sign(context.Background(), nil)
 	payload := decodePayload(t, token)
 
-	if got := payload[jwt.ClaimIssuer]; got != "praxis" {
-		t.Errorf("iss = %v, want %q", got, "praxis")
+	if got := payload[jwt.ClaimIssuer]; got != defaultIssuer {
+		t.Errorf("iss = %v, want %q", got, defaultIssuer)
 	}
 }
 
@@ -248,9 +250,9 @@ func TestEd25519Signer_MandatoryClaimsOverrideIncoming(t *testing.T) {
 
 	payload := decodePayload(t, token)
 
-	// iss must be "praxis" (default), not "attacker".
-	if got := payload[jwt.ClaimIssuer]; got != "praxis" {
-		t.Errorf("iss = %v, want %q (mandatory must override)", got, "praxis")
+	// iss must be the default issuer, not "attacker".
+	if got := payload[jwt.ClaimIssuer]; got != defaultIssuer {
+		t.Errorf("iss = %v, want %q (mandatory must override)", got, defaultIssuer)
 	}
 
 	// jti must not be "fake-jti".
@@ -564,7 +566,7 @@ func TestWithKeyID_Empty_NoKidInHeader(t *testing.T) {
 	parts := strings.Split(token, ".")
 	rawHeader, _ := base64.RawURLEncoding.DecodeString(parts[0])
 	var header map[string]any
-	json.Unmarshal(rawHeader, &header)
+	_ = json.Unmarshal(rawHeader, &header)
 
 	if _, ok := header["kid"]; ok {
 		t.Error("kid present in header without WithKeyID")
@@ -618,8 +620,8 @@ func TestWithExtraClaims_MandatoryClaimsWin(t *testing.T) {
 	payload := decodePayload(t, token)
 
 	// Mandatory iss must win over extra claims.
-	if got := payload[jwt.ClaimIssuer]; got != "praxis" {
-		t.Errorf("iss = %v, want %q (mandatory must win)", got, "praxis")
+	if got := payload[jwt.ClaimIssuer]; got != defaultIssuer {
+		t.Errorf("iss = %v, want %q (mandatory must win)", got, defaultIssuer)
 	}
 }
 

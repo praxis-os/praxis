@@ -233,8 +233,8 @@ func generateUUIDv7(now time.Time) (string, error) {
 
 	// Bytes 0–5: 48-bit big-endian Unix millisecond timestamp.
 	ms := uint64(now.UnixMilli())
-	binary.BigEndian.PutUint16(uuid[0:2], uint16(ms>>32))
-	binary.BigEndian.PutUint32(uuid[2:6], uint32(ms))
+	binary.BigEndian.PutUint16(uuid[0:2], uint16(ms>>32)) //nolint:gosec // 48-bit timestamp fits after shift
+	binary.BigEndian.PutUint32(uuid[2:6], uint32(ms))   //nolint:gosec // lower 32 bits of 48-bit timestamp
 
 	// Bytes 6–15: random, then set version and variant.
 	if _, err := rand.Read(uuid[6:]); err != nil {

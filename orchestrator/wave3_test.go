@@ -19,6 +19,8 @@ import (
 	"github.com/praxis-os/praxis/tools"
 )
 
+const testModel = "test-model"
+
 // --- PolicyHook tests ---
 
 type verdictHook struct {
@@ -32,7 +34,7 @@ func (h verdictHook) Evaluate(_ context.Context, _ hooks.Phase, _ hooks.PolicyIn
 func TestPolicyHook_Deny(t *testing.T) {
 	p := mock.NewSimple("unreachable")
 	o, _ := orchestrator.New(p,
-		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithDefaultModel(testModel),
 		orchestrator.WithPolicyHook(verdictHook{hooks.Deny("forbidden")}),
 	)
 
@@ -56,7 +58,7 @@ func TestPolicyHook_RequireApproval(t *testing.T) {
 	p := mock.NewSimple("unreachable")
 	meta := map[string]any{"reviewer": "admin"}
 	o, _ := orchestrator.New(p,
-		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithDefaultModel(testModel),
 		orchestrator.WithPolicyHook(verdictHook{hooks.RequireApproval("needs review", meta)}),
 	)
 
@@ -79,7 +81,7 @@ func TestPolicyHook_RequireApproval(t *testing.T) {
 func TestPolicyHook_Log(t *testing.T) {
 	p := mock.NewSimple("hello")
 	o, _ := orchestrator.New(p,
-		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithDefaultModel(testModel),
 		orchestrator.WithPolicyHook(verdictHook{hooks.Log("audit entry")}),
 	)
 
@@ -97,7 +99,7 @@ func TestPolicyHook_Log(t *testing.T) {
 func TestPolicyHook_Allow(t *testing.T) {
 	p := mock.NewSimple("hello")
 	o, _ := orchestrator.New(p,
-		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithDefaultModel(testModel),
 		orchestrator.WithPolicyHook(verdictHook{hooks.Allow()}),
 	)
 
@@ -117,7 +119,7 @@ func TestPolicyHook_Allow(t *testing.T) {
 func TestPolicyHook_Deny_Stream(t *testing.T) {
 	p := mock.NewSimple("unreachable")
 	o, _ := orchestrator.New(p,
-		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithDefaultModel(testModel),
 		orchestrator.WithPolicyHook(verdictHook{hooks.Deny("blocked")}),
 	)
 
@@ -155,7 +157,7 @@ func (redactingPreLLMFilter) Filter(_ context.Context, messages []llm.Message) (
 func TestPreLLMFilter_Block(t *testing.T) {
 	p := mock.NewSimple("unreachable")
 	o, _ := orchestrator.New(p,
-		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithDefaultModel(testModel),
 		orchestrator.WithPreLLMFilter(blockingPreLLMFilter{reason: "toxic content"}),
 	)
 
@@ -173,7 +175,7 @@ func TestPreLLMFilter_Block(t *testing.T) {
 func TestPreLLMFilter_Redact_EmitsPIIEvent(t *testing.T) {
 	p := mock.NewSimple("hello")
 	o, _ := orchestrator.New(p,
-		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithDefaultModel(testModel),
 		orchestrator.WithPreLLMFilter(redactingPreLLMFilter{}),
 	)
 
@@ -232,7 +234,7 @@ func TestPostToolFilter_Block(t *testing.T) {
 	)
 
 	o, _ := orchestrator.New(p,
-		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithDefaultModel(testModel),
 		orchestrator.WithToolInvoker(inv),
 		orchestrator.WithPostToolFilter(blockingPostToolFilter{}),
 	)
@@ -260,7 +262,7 @@ func TestPostToolFilter_Redact(t *testing.T) {
 	)
 
 	o, _ := orchestrator.New(p,
-		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithDefaultModel(testModel),
 		orchestrator.WithToolInvoker(inv),
 		orchestrator.WithPostToolFilter(redactingPostToolFilter{}),
 	)
@@ -295,7 +297,7 @@ func TestSoftCancel_ProducesCancellationKindSoft(t *testing.T) {
 	cancel() // Soft cancel (context.Canceled)
 
 	p := mock.NewSimple("unreachable")
-	o, _ := orchestrator.New(p, orchestrator.WithDefaultModel("test-model"))
+	o, _ := orchestrator.New(p, orchestrator.WithDefaultModel(testModel))
 
 	_, err := o.Invoke(ctx, praxis.InvocationRequest{
 		Messages: userMsg("hi"),
@@ -318,7 +320,7 @@ func TestHardCancel_ProducesCancellationKindHard(t *testing.T) {
 	defer cancel()
 
 	p := mock.NewSimple("unreachable")
-	o, _ := orchestrator.New(p, orchestrator.WithDefaultModel("test-model"))
+	o, _ := orchestrator.New(p, orchestrator.WithDefaultModel(testModel))
 
 	_, err := o.Invoke(ctx, praxis.InvocationRequest{
 		Messages: userMsg("hi"),
@@ -341,7 +343,7 @@ func TestCancel_TerminalEventAlwaysEmitted(t *testing.T) {
 	cancel()
 
 	p := mock.NewSimple("unreachable")
-	o, _ := orchestrator.New(p, orchestrator.WithDefaultModel("test-model"))
+	o, _ := orchestrator.New(p, orchestrator.WithDefaultModel(testModel))
 
 	ch := o.InvokeStream(ctx, praxis.InvocationRequest{
 		Messages: userMsg("hi"),
@@ -377,7 +379,7 @@ func TestPolicyHook_ReceivesCorrectInput(t *testing.T) {
 	var captured hooks.PolicyInput
 	hook := &inputCapturingHook{captured: &captured}
 	o, _ := orchestrator.New(p,
-		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithDefaultModel(testModel),
 		orchestrator.WithPolicyHook(hook),
 	)
 
@@ -390,7 +392,7 @@ func TestPolicyHook_ReceivesCorrectInput(t *testing.T) {
 		t.Fatalf("Invoke: %v", err)
 	}
 
-	if captured.Model != "test-model" {
+	if captured.Model != testModel {
 		t.Errorf("PolicyInput.Model: want test-model, got %q", captured.Model)
 	}
 	if captured.SystemPrompt != "be helpful" {
@@ -425,7 +427,7 @@ func TestPolicyHook_PreLLMInput_Invoked(t *testing.T) {
 	var captured hooks.PolicyInput
 	hook := &phaseCapturingHook{targetPhase: hooks.PhasePreLLMInput, captured: &captured}
 	o, _ := orchestrator.New(p,
-		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithDefaultModel(testModel),
 		orchestrator.WithPolicyHook(hook),
 	)
 
@@ -438,7 +440,7 @@ func TestPolicyHook_PreLLMInput_Invoked(t *testing.T) {
 		t.Fatalf("Invoke: %v", err)
 	}
 
-	if captured.Model != "test-model" {
+	if captured.Model != testModel {
 		t.Errorf("PolicyInput.Model: want test-model, got %q", captured.Model)
 	}
 	if captured.SystemPrompt != "be helpful" {
@@ -455,7 +457,7 @@ func TestPolicyHook_PreLLMInput_Invoked(t *testing.T) {
 func TestPolicyHook_PreLLMInput_Deny(t *testing.T) {
 	p := mock.NewSimple("unreachable")
 	o, _ := orchestrator.New(p,
-		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithDefaultModel(testModel),
 		orchestrator.WithPolicyHook(phaseVerdictHook{
 			phase:   hooks.PhasePreLLMInput,
 			verdict: hooks.Deny("blocked at pre-LLM"),
@@ -480,7 +482,7 @@ func TestPolicyHook_PreLLMInput_Deny(t *testing.T) {
 func TestPolicyHook_PreLLMInput_RequireApproval(t *testing.T) {
 	p := mock.NewSimple("unreachable")
 	o, _ := orchestrator.New(p,
-		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithDefaultModel(testModel),
 		orchestrator.WithPolicyHook(phaseVerdictHook{
 			phase:   hooks.PhasePreLLMInput,
 			verdict: hooks.RequireApproval("needs review", nil),
@@ -526,7 +528,7 @@ func TestPolicyHook_PostToolOutput_Invoked(t *testing.T) {
 	var captured hooks.PolicyInput
 	hook := &phaseCapturingHook{targetPhase: hooks.PhasePostToolOutput, captured: &captured}
 	o, _ := orchestrator.New(p,
-		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithDefaultModel(testModel),
 		orchestrator.WithPolicyHook(hook),
 	)
 
@@ -538,7 +540,7 @@ func TestPolicyHook_PostToolOutput_Invoked(t *testing.T) {
 		t.Fatalf("Invoke: %v", err)
 	}
 
-	if captured.Model != "test-model" {
+	if captured.Model != testModel {
 		t.Errorf("PolicyInput.Model: want test-model, got %q", captured.Model)
 	}
 	if captured.ToolResult == nil {
@@ -564,7 +566,7 @@ func TestPolicyHook_PostToolOutput_Deny(t *testing.T) {
 		},
 	)
 	o, _ := orchestrator.New(p,
-		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithDefaultModel(testModel),
 		orchestrator.WithPolicyHook(phaseVerdictHook{
 			phase:   hooks.PhasePostToolOutput,
 			verdict: hooks.Deny("tool output rejected"),
@@ -597,7 +599,7 @@ func TestPolicyHook_PostToolOutput_RequireApproval(t *testing.T) {
 		},
 	)
 	o, _ := orchestrator.New(p,
-		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithDefaultModel(testModel),
 		orchestrator.WithPolicyHook(phaseVerdictHook{
 			phase:   hooks.PhasePostToolOutput,
 			verdict: hooks.RequireApproval("review tool output", nil),
@@ -659,7 +661,7 @@ func toolCallProvider() *mock.Provider {
 
 func TestPreToolFilter_PassThrough(t *testing.T) {
 	p := toolCallProvider()
-	o, _ := orchestrator.New(p, orchestrator.WithDefaultModel("test-model"))
+	o, _ := orchestrator.New(p, orchestrator.WithDefaultModel(testModel))
 
 	result, err := o.Invoke(context.Background(), praxis.InvocationRequest{
 		Messages: userMsg("do something"),
@@ -675,7 +677,7 @@ func TestPreToolFilter_PassThrough(t *testing.T) {
 func TestPreToolFilter_Block(t *testing.T) {
 	p := toolCallProvider()
 	o, _ := orchestrator.New(p,
-		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithDefaultModel(testModel),
 		orchestrator.WithPreToolFilter(blockingPreToolFilter{reason: "tool not allowed"}),
 	)
 
@@ -699,7 +701,7 @@ func TestPreToolFilter_ModifiesInput(t *testing.T) {
 
 	p := toolCallProvider()
 	o, _ := orchestrator.New(p,
-		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithDefaultModel(testModel),
 		orchestrator.WithToolInvoker(invoker),
 		orchestrator.WithPreToolFilter(modifyingPreToolFilter{}),
 	)
@@ -724,7 +726,7 @@ func (panickingPreToolFilter) Filter(_ context.Context, _ tools.ToolCall) (tools
 func TestPreToolFilter_PanicRecovery(t *testing.T) {
 	p := toolCallProvider()
 	o, _ := orchestrator.New(p,
-		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithDefaultModel(testModel),
 		orchestrator.WithPreToolFilter(panickingPreToolFilter{}),
 	)
 
@@ -780,7 +782,7 @@ func TestVerdictContinue_ForcesExtraLLMTurn(t *testing.T) {
 	)
 
 	o, _ := orchestrator.New(p,
-		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithDefaultModel(testModel),
 		orchestrator.WithPolicyHook(&continueOnceHook{}),
 	)
 
@@ -801,7 +803,7 @@ func TestVerdictContinue_ForcesExtraLLMTurn(t *testing.T) {
 func TestVerdictContinue_AtOtherPhases_BehavesLikeAllow(t *testing.T) {
 	p := mock.NewSimple("hello")
 	o, _ := orchestrator.New(p,
-		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithDefaultModel(testModel),
 		orchestrator.WithPolicyHook(phaseVerdictHook{
 			phase:   hooks.PhasePreInvocation,
 			verdict: hooks.Continue("should be treated as allow"),
@@ -835,7 +837,7 @@ func TestVerdictContinue_BoundedByMaxTurns(t *testing.T) {
 		mock.Response{LLMResponse: llm.LLMResponse{Message: llm.Message{Role: llm.RoleAssistant, Parts: []llm.MessagePart{llm.TextPart("r4")}}, StopReason: llm.StopReasonEndTurn}},
 	)
 	o, _ := orchestrator.New(p,
-		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithDefaultModel(testModel),
 		orchestrator.WithMaxTurns(3),
 		orchestrator.WithPolicyHook(alwaysContinue),
 	)

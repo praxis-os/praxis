@@ -28,7 +28,7 @@ import (
 // suiteReq is a factory that returns a fresh simple-text request for each test.
 // toolReq is a factory that returns a request that triggers a tool call.
 // If toolReq is nil, tool-related tests are skipped.
-func RunSuite(t *testing.T, p llm.Provider, suiteReq func() llm.LLMRequest, toolReq func() llm.LLMRequest) {
+func RunSuite(t *testing.T, p llm.Provider, suiteReq func() llm.LLMRequest, toolReq func() llm.LLMRequest) { //nolint:gocyclo // conformance suite is a single orchestration function by design
 	t.Helper()
 
 	t.Run("Name", func(t *testing.T) {
