@@ -127,37 +127,37 @@
 | T17.4 | PRAX-114 | PRAX-25 | examples/streaming/ |
 
 ## Subtasks — v0.5.0
-| ID | Key | Story | Title |
-|----|-----|-------|-------|
-| T18.1 | PRAX-115 | PRAX-26 | identity.NewEd25519Signer |
-| T18.2 | PRAX-116 | PRAX-26 | JWT with 5+2 claims |
-| T18.3 | PRAX-117 | PRAX-26 | Token lifetime [5s, 300s] |
-| T18.4 | PRAX-118 | PRAX-26 | With* signer options |
-| T18.5 | PRAX-119 | PRAX-26 | internal/jwt stdlib-only |
-| T18.6 | PRAX-120 | PRAX-26 | Identity chaining (parent_token) |
-| T19.1 | PRAX-121 | PRAX-27 | Resolver.Fetch with soft-cancel |
-| T19.2 | PRAX-122 | PRAX-27 | credentials.ZeroBytes |
-| T19.3 | PRAX-123 | PRAX-27 | Credential.Close() with KeepAlive |
-| T20.1 | PRAX-124 | PRAX-28 | Panic recovery on hook/filter sites |
-| T20.2 | PRAX-125 | PRAX-28 | Trust boundary logging levels |
-| T20.3 | PRAX-126 | PRAX-28 | 26 security invariant tests |
-| T21.1 | PRAX-127 | PRAX-29 | slog RedactingHandler |
-| T21.2 | PRAX-128 | PRAX-29 | 10 Prometheus metrics |
-| T21.3 | PRAX-129 | PRAX-29 | FilterDecision to events |
-| T21.4 | PRAX-130 | PRAX-29 | Error-to-event 1:1 mapping |
-| T22.1 | PRAX-131 | PRAX-30 | BudgetExceeded godoc caveat |
-| T22.2 | PRAX-132 | PRAX-30 | Classifier identity rule (errors.As) |
-| T22.3 | PRAX-133 | PRAX-30 | VerdictLog AuditNote |
-| T23.1 | PRAX-134 | PRAX-31 | Orchestrator overhead < 15ms |
-| T23.2 | PRAX-135 | PRAX-31 | State machine 1M transitions/sec |
-| T23.3 | PRAX-136 | PRAX-31 | benchstat in PR CI |
-| T23.4 | PRAX-137 | PRAX-31 | Conformance suite green |
-| T24.1 | PRAX-138 | PRAX-32 | 85% coverage maintained |
-| T24.2 | PRAX-139 | PRAX-32 | All CI jobs operational |
-| T24.3 | PRAX-140 | PRAX-32 | Godoc on every exported symbol |
-| T24.4 | PRAX-141 | PRAX-32 | Integration tests for 14 interfaces |
-| T25.1 | PRAX-142 | PRAX-33 | examples/identity/ |
-| T25.2 | PRAX-143 | PRAX-33 | examples/credentials/ |
+| ID | Key | Story | Title | Wave | Status |
+|----|-----|-------|-------|------|--------|
+| T18.5 | PRAX-119 | PRAX-26 | internal/jwt stdlib-only | 1 | To Do |
+| T19.2 | PRAX-122 | PRAX-27 | credentials.ZeroBytes | 1 | To Do |
+| T21.1 | PRAX-127 | PRAX-29 | slog RedactingHandler | 1 | To Do |
+| T22.3 | PRAX-133 | PRAX-30 | VerdictLog AuditNote | 1 | To Do |
+| T18.1 | PRAX-115 | PRAX-26 | identity.NewEd25519Signer | 2 | To Do |
+| T19.3 | PRAX-123 | PRAX-27 | Credential.Close() with KeepAlive | 2 | To Do |
+| T20.1 | PRAX-124 | PRAX-28 | Panic recovery on hook/filter sites | 2 | To Do |
+| T21.2 | PRAX-128 | PRAX-29 | 10 Prometheus metrics | 2 | To Do |
+| T18.2 | PRAX-116 | PRAX-26 | JWT with 5+2 claims | 3 | To Do |
+| T18.3 | PRAX-117 | PRAX-26 | Token lifetime [5s, 300s] | 3 | To Do |
+| T18.4 | PRAX-118 | PRAX-26 | With* signer options | 3 | To Do |
+| T19.1 | PRAX-121 | PRAX-27 | Resolver.Fetch with soft-cancel | 3 | To Do |
+| T20.2 | PRAX-125 | PRAX-28 | Trust boundary logging levels | 3 | To Do |
+| T21.3 | PRAX-129 | PRAX-29 | FilterDecision to events | 3 | To Do |
+| T21.4 | PRAX-130 | PRAX-29 | Error-to-event 1:1 mapping | 3 | To Do |
+| T18.6 | PRAX-120 | PRAX-26 | Identity chaining (parent_token) | 4 | To Do |
+| T23.1 | PRAX-134 | PRAX-31 | Orchestrator overhead < 15ms | 5 | To Do |
+| T23.2 | PRAX-135 | PRAX-31 | State machine 1M transitions/sec | 5 | To Do |
+| T23.3 | PRAX-136 | PRAX-31 | benchstat in PR CI | 5 | To Do |
+| T23.4 | PRAX-137 | PRAX-31 | Conformance suite green | 5 | To Do |
+| T20.3 | PRAX-126 | PRAX-28 | 26 security invariant tests | 6 | To Do |
+| T24.1 | PRAX-138 | PRAX-32 | 85% coverage maintained | 6 | To Do |
+| T24.2 | PRAX-139 | PRAX-32 | All CI jobs operational | 6 | To Do |
+| T24.3 | PRAX-140 | PRAX-32 | Godoc on every exported symbol | 6 | To Do |
+| T24.4 | PRAX-141 | PRAX-32 | Integration tests for 14 interfaces | 6 | To Do |
+| T25.1 | PRAX-142 | PRAX-33 | examples/identity/ | 6 | To Do |
+| T25.2 | PRAX-143 | PRAX-33 | examples/credentials/ | 6 | To Do |
+| T22.1 | PRAX-131 | PRAX-30 | BudgetExceeded godoc caveat | skip | Done (pre-existing) |
+| T22.2 | PRAX-132 | PRAX-30 | Classifier identity rule (errors.As) | skip | Done (pre-existing) |
 
 ## Subtasks — v1.0.0
 | ID | Key | Story | Title |
