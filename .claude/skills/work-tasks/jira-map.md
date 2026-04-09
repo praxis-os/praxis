@@ -154,12 +154,12 @@
 | T24.2 | PRAX-139 | PRAX-32 | All CI jobs operational | 6 | To Do |
 | T24.3 | PRAX-140 | PRAX-32 | Godoc on every exported symbol | 6 | To Do |
 | T24.4 | PRAX-141 | PRAX-32 | Integration tests for 14 interfaces | 6 | To Do |
-| T25.1 | PRAX-142 | PRAX-33 | examples/identity/ | 6 | To Do |
-| T25.2 | PRAX-143 | PRAX-33 | examples/credentials/ | 6 | To Do |
+| T25.1 | PRAX-142 | PRAX-33 | examples/identity/ | 6 | Done |
+| T25.2 | PRAX-143 | PRAX-33 | examples/credentials/ | 6 | Done |
 | T20.4 | PRAX-155 | PRAX-28 | Activate PhasePreLLMInput in loop | 6 | Done |
 | T20.5 | PRAX-156 | PRAX-28 | Activate PhasePostToolOutput in loop | 6 | Done |
-| T20.6 | PRAX-157 | PRAX-28 | PreToolFilter interface (pre-tool gate) | 6 | To Do |
-| T20.7 | PRAX-158 | PRAX-28 | VerdictContinue (post-invocation continuation) | 6 | To Do |
+| T20.6 | PRAX-157 | PRAX-28 | PreToolFilter interface (pre-tool gate) | 6 | Done |
+| T20.7 | PRAX-158 | PRAX-28 | VerdictContinue (post-invocation continuation) | 6 | Done |
 | T22.1 | PRAX-131 | PRAX-30 | BudgetExceeded godoc caveat | skip | Done (pre-existing) |
 | T22.2 | PRAX-132 | PRAX-30 | Classifier identity rule (errors.As) | skip | Done (pre-existing) |
 
