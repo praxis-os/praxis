@@ -52,4 +52,9 @@ type InvocationEvent struct {
 
 	// ApprovalSnapshot is populated only for EventTypeApprovalRequired.
 	ApprovalSnapshot *errors.ApprovalSnapshot
+
+	// AuditNote is an optional human-readable annotation attached by policy hooks
+	// or filters to provide audit trail context for this event. It is empty when
+	// no annotation was provided.
+	AuditNote string
 }

@@ -61,13 +61,14 @@ func (o *Orchestrator) runLoop(
 	emit(event.EventTypePreHookStarted, state.PreHook)
 
 	// Pre-invocation policy hook evaluation.
-	if result := o.evaluatePolicy(ctx, machine, sink, emit, emitTerminal, hooks.PhasePreInvocation, hooks.PolicyInput{
+	preResult, preAuditNote := o.evaluatePolicy(ctx, machine, sink, emit, emitTerminal, hooks.PhasePreInvocation, hooks.PolicyInput{
 		Model:        model,
 		SystemPrompt: req.SystemPrompt,
 		Messages:     req.Messages,
 		Metadata:     req.Metadata,
-	}); result != nil {
-		return result
+	})
+	if preResult != nil {
+		return preResult
 	}
 
 	// Conversation history.
@@ -82,7 +83,12 @@ func (o *Orchestrator) runLoop(
 			if err := machine.Transition(state.LLMCall); err != nil {
 				return o.failLoop(ctx, machine, sink, errors.NewSystemError("transition to LLMCall failed", err))
 			}
-			emit(event.EventTypePreHookCompleted, state.LLMCall)
+			sink(ctx, event.InvocationEvent{
+				Type:      event.EventTypePreHookCompleted,
+				State:     state.LLMCall,
+				At:        now(),
+				AuditNote: preAuditNote,
+			})
 			firstCall = false
 		}
 
@@ -215,7 +221,9 @@ func (o *Orchestrator) checkCancel(
 }
 
 // evaluatePolicy runs the PolicyHook at the given phase and handles the
-// 4 verdicts. Returns nil if the invocation should continue.
+// 4 verdicts. Returns (nil, auditNote) if the invocation should continue.
+// auditNote is non-empty when the verdict is VerdictLog and Decision.Reason
+// is set; it is empty for VerdictAllow and all terminal verdicts.
 func (o *Orchestrator) evaluatePolicy(
 	ctx context.Context,
 	machine *state.Machine,
@@ -224,28 +232,28 @@ func (o *Orchestrator) evaluatePolicy(
 	emitTerminal func(event.EventType, state.State, error),
 	phase hooks.Phase,
 	input hooks.PolicyInput,
-) *praxis.InvocationResult {
+) (*praxis.InvocationResult, string) {
 	decision, err := o.policyHook.Evaluate(ctx, phase, input)
 	if err != nil {
 		return o.failLoop(ctx, machine, sink, errors.NewSystemError(
-			fmt.Sprintf("policy hook error at %s", phase), err))
+			fmt.Sprintf("policy hook error at %s", phase), err)), ""
 	}
 
 	switch decision.Verdict {
 	case hooks.VerdictAllow:
-		return nil
+		return nil, ""
 
 	case hooks.VerdictLog:
 		slog.InfoContext(ctx, "policy hook log",
 			"phase", string(phase),
 			"reason", decision.Reason)
-		return nil
+		return nil, decision.Reason
 
 	case hooks.VerdictDeny:
 		policyErr := errors.NewPolicyDeniedError(string(phase), decision.Reason)
 		_ = machine.Transition(state.Failed)
 		emitTerminal(event.EventTypeInvocationFailed, state.Failed, policyErr)
-		return &praxis.InvocationResult{FinalState: state.Failed}
+		return &praxis.InvocationResult{FinalState: state.Failed}, ""
 
 	case hooks.VerdictRequireApproval:
 		snapshot := errors.ApprovalSnapshot{
@@ -263,11 +271,11 @@ func (o *Orchestrator) evaluatePolicy(
 			Err:              errors.NewApprovalRequiredError(snapshot),
 			ApprovalSnapshot: &snapshot,
 		})
-		return &praxis.InvocationResult{FinalState: state.ApprovalRequired}
+		return &praxis.InvocationResult{FinalState: state.ApprovalRequired}, ""
 
 	default:
 		return o.failLoop(ctx, machine, sink, errors.NewSystemError(
-			fmt.Sprintf("unknown policy verdict %q at %s", decision.Verdict, phase), nil))
+			fmt.Sprintf("unknown policy verdict %q at %s", decision.Verdict, phase), nil)), ""
 	}
 }
 
@@ -366,20 +374,26 @@ func (o *Orchestrator) completeLoop(
 
 	// Post-invocation policy hook evaluation.
 	resp := llm.LLMResponse{Message: msg}
-	if result := o.evaluatePolicy(ctx, machine, sink, emit, emitTerminal, hooks.PhasePostInvocation, hooks.PolicyInput{
+	postResult, postAuditNote := o.evaluatePolicy(ctx, machine, sink, emit, emitTerminal, hooks.PhasePostInvocation, hooks.PolicyInput{
 		Model:        model,
 		SystemPrompt: req.SystemPrompt,
 		Messages:     req.Messages,
 		LLMResponse:  &resp,
 		Metadata:     req.Metadata,
-	}); result != nil {
-		return result
+	})
+	if postResult != nil {
+		return postResult
 	}
 
 	if err := machine.Transition(state.Completed); err != nil {
 		return o.failLoop(ctx, machine, sink, errors.NewSystemError("transition to Completed failed", err))
 	}
-	emit(event.EventTypePostHookCompleted, state.Completed)
+	sink(ctx, event.InvocationEvent{
+		Type:      event.EventTypePostHookCompleted,
+		State:     state.Completed,
+		At:        time.Now(),
+		AuditNote: postAuditNote,
+	})
 
 	emitTerminal(event.EventTypeInvocationCompleted, state.Completed, nil)
 	return &praxis.InvocationResult{
