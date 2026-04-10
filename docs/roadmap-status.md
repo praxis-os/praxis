@@ -21,7 +21,7 @@
 
 ## Locked Decisions
 
-**Total:** ~133 decisions adopted across **D01–D134** (contiguous
+**Total:** ~134 decisions adopted across **D01–D135** (contiguous
 range; a small number of reserved/released slots within individual
 phases, per each phase's decision log).
 
@@ -36,7 +36,7 @@ Per-phase allocation:
 | 5 | D67–D80 | 14 decisions on credential, identity, trust boundaries |
 | 6 | D81–D105 | 25 decisions on release + governance |
 | 7 | D106–D121 | 16 decisions on `praxis/mcp` sub-module |
-| 8 | D122–D134 | 13 decisions on `praxis/skills` sub-module |
+| 8 | D122–D135 | 14 decisions on `praxis/skills` sub-module (D135 added 2026-04-10 as release-pipeline amendment obligation, analogous to Phase 7 D121) |
 
 ## Completed Work
 
@@ -89,7 +89,7 @@ Per-phase allocation:
 
 ## Open Decisions
 
-None at the planning level. All decisions in D01–D134 are locked.
+None at the planning level. All decisions in D01–D135 are locked.
 Three items are explicitly deferred to the implementation phase
 by Phase 8's reviewer:
 
@@ -133,25 +133,46 @@ for research deliverables.
 
 ## Next Step
 
-**Transition from planning to implementation.** Begin the v0.1.0
-milestone — first working invocation with Anthropic provider, no
-hooks, no filters, no budget — following
-`docs/phase-6-release-governance/06-release-milestones.md`. The
+**v0.5.0 has shipped** (tag `v0.5.0`, commit `65daa89`, release PR
+#20). The next live implementation milestone is **v0.7.0 — the
+`praxis/mcp` sub-module**, following
+`docs/phase-6-release-governance/06-release-milestones.md` §4
+(added 2026-04-10). Implementation order from here runs
+`5 → 7 → 8 → 6`: v0.7.0 (MCP) → v0.9.0 (Skills) → v1.0.0 (freeze).
+Phase 6 lands last because it *is* the API-freeze phase and
+depends on both sub-modules being stable.
+
+The first concrete task is the release-pipeline amendment from
+Phase 7 D121: extend `.github/release-please-config.json` from the
+single-package form to the two-package form (`.` + `mcp`). The
 `golang-pro` implementation subagent takes over from the design
 subagents.
 
 ## Overall Status
 
-- **v0.1.0 (first working invocation):** **UNBLOCKED.** All
-  interface contracts and core-runtime design are frozen; the
-  Anthropic provider adapter and zero-wiring smoke test can start
-  immediately.
-- **v0.5.0 (feature complete):** **UNBLOCKED.** All hooks, filters,
-  budget, telemetry, credentials, identity, and observability
-  contracts are frozen at v1.0 tiers. `praxis/mcp` and
-  `praxis/skills` sub-modules can ship alongside the core module
-  independently.
+- **v0.1.0 → v0.5.0:** **SHIPPED.** Core module feature-complete.
+  All hooks, filters, budget, telemetry, credentials, identity, and
+  observability contracts are live at v1.0-candidate tiers. Tag
+  `v0.5.0` serves real traffic in caller codebases.
+- **v0.7.0 (`praxis/mcp` sub-module):** **UNBLOCKED; next live
+  milestone.** Phase 7 approved with D106–D121 locked. The only
+  implementation-phase gate is the `modelcontextprotocol/go-sdk`
+  transitive-dependency audit per D107 precondition 3, handled
+  inside the PR that introduces the dependency. The release-pipeline
+  amendment obligation from D121 is the first concrete task.
+- **v0.9.0 (`praxis/skills` sub-module):** **UNBLOCKED, gated on
+  v0.7.0.** Phase 8 approved with D122–D135 locked. D135 (added
+  2026-04-10) is the release-pipeline amendment obligation
+  analogous to D121, obliging a third `skills` entry in the
+  release-please manifest. Cannot start before v0.7.0 lands because
+  the three-package form extends the two-package form; also
+  because the `04-dx-and-errors.md §1.4` worked wiring example
+  requires `praxis/mcp` to be importable to compile.
 - **v1.0.0 (API freeze):** **UNBLOCKED on design.** Freeze
-  commitment follows the first production consumer per Phase 1
-  D04. Implementation must not drift from the Phase 3 frozen
-  signatures.
+  commitment follows the D91 production-consumer gate, re-anchored
+  from `v0.5.x` to `v0.9.x` by the 2026-04-10 roadmap reorder so
+  that the consumer has exercised at least one of the sub-modules
+  in production. Implementation must not drift from the Phase 3
+  frozen signatures; all new types in `praxis/mcp` and
+  `praxis/skills` remain `stable-v0.x-candidate` until their
+  respective sub-module v1.0.0 tags.

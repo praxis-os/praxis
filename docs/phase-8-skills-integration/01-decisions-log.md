@@ -11,8 +11,14 @@
 
 - **First decision ID:** **D122** (immediately after Phase 7's last
   decision, D121).
-- **Last decision ID:** **D134**. The Phase 8 range is
-  **D122–D134**, contiguous, 13 decisions.
+- **Last decision ID:** **D135**. The Phase 8 range is
+  **D122–D135**, contiguous, 14 decisions. (Originally D122–D134 at
+  phase close; extended by one to D135 on 2026-04-10 to record the
+  release-pipeline amendment obligation surfaced by the roadmap
+  reorder — see D135 below. This extension mirrors Phase 7's own
+  post-review append of D121 and is permitted by the Phase 1
+  Amendment Protocol because the new decision is additive and
+  does not mutate any existing D122–D134 text.)
 - **Contiguity rule:** Phase 8 owns a contiguous range that begins
   immediately after Phase 7's range. No skips, no gaps.
 - **Ordering rule:** Phase 8 may begin adopting decisions now that
@@ -123,12 +129,153 @@ User-confirmed positions on the two load-bearing trade-offs:
 | D132 | DX + error catalogue: typed `LoadError` with stable subkinds; worked end-to-end example; cross-reference (not disambiguation) with Claude Code `.claude/skills/`; no template-variable substitution | **decided** |
 | D133 | Non-goals catalogue (11 binding items): no registry, no download, no runtime discovery, no hot-reload, no authoring tooling, no sandboxing, no `mcp_servers` recognised field, no provenance verification, no automatic credential injection, no consumer brand awareness, explicit D09 re-confirmation | **decided** |
 | D134 | Impact on frozen v1.0 surface: zero amendments to Phase 3 `frozen-v1.0` signatures; all new types live in `praxis/skills` sub-module at `stable-v0.x-candidate` tier (freeze at `praxis/skills v1.0.0`); `MetricsRecorder` at `experimental` | **decided** |
+| D135 | Phase 6 release-pipeline amendment for the `praxis/skills` sub-module: obligates the release-please manifest to grow a third `skills` package entry (alongside `.` and `mcp`) before the first `praxis/skills` tag is cut. Mirrors Phase 7 D121 for `praxis/mcp` | **decided** |
 
 Legend: **decided** = full rationale present in the relevant
 artifact, reviewer pass clean, no outstanding contradictions,
 ready for implementation phase. The Phase 8 decision range
-**D122–D134 (13 decisions, contiguous)** is closed; D135 is
+**D122–D135 (14 decisions, contiguous)** is closed; D136 is
 available for any future phase.
+
+---
+
+## D135 — Phase 6 release-pipeline amendment for the `praxis/skills` sub-module
+
+**Status:** decided
+**Adopted:** 2026-04-10
+**Summary:** Phase 8 records a specific amendment obligation against
+Phase 6 D84: the release-please configuration must grow a third
+`packages` entry for `skills/` before any `praxis/skills` tag is
+cut. This decision is the binding reference for that obligation
+and is the direct structural analogue of Phase 7 D121 for the
+`praxis/mcp` sub-module.
+
+**Decision.** Before the first `praxis/skills` release commit
+lands on `main`, the release-please manifest at
+`.github/release-please-config.json` (per D84, already extended
+by D121 to include `mcp/`) must be extended from the two-package
+form:
+
+```json
+{
+  "packages": {
+    ".":    { ... existing core config ... },
+    "mcp":  { ... per D121 ... }
+  }
+}
+```
+
+to the three-package form:
+
+```json
+{
+  "packages": {
+    ".":    { ... existing core config ... },
+    "mcp":  { ... per D121 ... },
+    "skills": {
+      "release-type": "go",
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": false,
+      "always-update": true,
+      "changelog-sections": [
+        {"type": "feat",     "section": "Added"},
+        {"type": "fix",      "section": "Fixed"},
+        {"type": "docs",     "section": "Documentation"},
+        {"type": "perf",     "section": "Performance"},
+        {"type": "refactor", "section": "Changed"},
+        {"type": "test",     "section": "Testing"},
+        {"type": "chore",    "section": "Maintenance", "hidden": true},
+        {"type": "ci",       "section": "CI",          "hidden": true},
+        {"type": "build",    "section": "Build",       "hidden": true}
+      ],
+      "extra-files": ["skills/internal/version/version.go"]
+    }
+  }
+}
+```
+
+and a corresponding `.github/release-please-manifest.json` must
+track three keys:
+
+```json
+{
+  ".":      "0.5.0",
+  "mcp":    "0.0.0",
+  "skills": "0.0.0"
+}
+```
+
+Conventional commits scoped to the `praxis/skills` module must
+carry a path-prefixed scope (`feat(skills): ...`,
+`fix(skills): ...`) so that release-please routes them to the
+correct package. This convention is recorded here; the
+`commitsar` configuration (D84) accepts it without modification
+because it uses a free-form scope field (same reasoning as D121
+for the `mcp` scope).
+
+**This is an amendment obligation against Phase 6, not an
+automatic amendment.** Phase 6's decision log (D84) is not
+retroactively edited. The Phase 6 `01-decisions-log.md`
+Amendment Protocol requires that amendments live in the phase
+that discovers the need. D135 is that record for Phase 8's
+sub-module, exactly as D121 is that record for Phase 7's
+sub-module. When the release pipeline is actually updated in the
+repository, the corresponding `release-please` configuration
+commit cites D135 in its commit message.
+
+**Rationale.** The roadmap reorder of 2026-04-10 (implementation
+order 5 → 7 → 8 → 6) makes explicit what was previously only
+implicit in D122: the `praxis/skills` sub-module will ship as
+its own `v0.9.0` tag before the v1.0.0 API freeze. Without a
+third `packages` entry in the release-please manifest, the
+`praxis/skills` sub-module would never receive an independent
+tag and the "separately-versioned sub-module" commitment in D122
+would be architecturally unsupported — the same failure mode
+D121 prevents for `praxis/mcp`. D135 closes this gap before any
+implementation work begins.
+
+The decision is being adopted *after* Phase 8's original close
+at D134. This is consistent with Phase 1's Amendment Protocol:
+the new decision is additive (it does not rewrite any D122–D134
+text), the Phase 8 range is contiguously extended from D122–D134
+to D122–D135, and the decision is recorded in the phase that
+discovers the need (Phase 8), not by retroactively editing
+Phase 6's D84. Phase 7 followed the same pattern when it added
+D121 late in its own reviewer cycle.
+
+**Alternatives considered.** (a) Retroactively edit D84 —
+rejected by the Phase 1 Amendment Protocol; the original decision
+stays intact and amendments are recorded in the phase that
+discovers them. (b) Retroactively edit D121 to include a
+`skills` package entry — rejected for the same reason and
+because Phase 7 is `approved` and closed; mutating D121 would
+violate the decoupling between phases. (c) Defer the pipeline
+obligation to the implementation phase without a Phase 8
+record — rejected; the "first-class sub-module" claim in D122
+would be architecturally unsupported at v0.9.0, which would
+silently re-introduce the exact failure mode the Phase 7
+reviewer caught in D106's original rationale. (d) Record the
+obligation in a new standalone doc rather than as a decision —
+rejected; the Phase 1 Amendment Protocol is the project's only
+load-bearing mechanism for binding cross-phase obligations, and
+bypassing it would weaken every future reference to "Phase 8
+decisions" as a complete set.
+
+**Cross-references.**
+- **D121** (Phase 7) — the structural template this decision
+  mirrors. Any future pipeline change that affects both sub-modules
+  should amend both D121 and D135 symmetrically in whatever phase
+  discovers the need.
+- **D122** (Phase 8) — the positioning decision that makes the
+  sub-module first-class and therefore requires an independent
+  release tag.
+- **D84** (Phase 6) — the single-package release-please manifest
+  this obligation amends; still not edited retroactively.
+- **CLAUDE.md § Release targets** and
+  **`docs/phase-6-release-governance/06-release-milestones.md` § 5
+  (v0.9.0 — Skills Integration)** — the derivative documents
+  updated by the same 2026-04-10 roadmap reorder that surfaced
+  this decision.
 
 ## Amendment Protocol
 
