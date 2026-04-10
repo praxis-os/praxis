@@ -1,6 +1,6 @@
 # Roadmap Status
 
-**Last updated:** 2026-04-06
+**Last updated:** 2026-04-10
 **Target:** `praxis v1.0.0` — stable public Go API for enterprise agent orchestration
 
 ## Phase Status
@@ -14,6 +14,8 @@
 | 4 | Observability and Error Model | **approved** | 9 (`00-plan.md`, `01-decisions-log.md`, `02-span-tree.md`, `03-metrics.md`, `04-slog-redaction.md`, `05-error-event-mapping.md`, `06-filter-event-mapping.md`, `go-architect-validation.md`, `REVIEW.md`) |
 | 5 | Security and Trust Boundaries | **approved** | 8 (`00-plan.md`, `01-decisions-log.md`, `02-credential-lifecycle.md`, `03-identity-signing.md`, `04-trust-boundaries.md`, `05-security-invariants.md`, `go-architect-validation.md`, `REVIEW.md`) |
 | 6 | Release, Versioning and Community Governance | **approved** | 8 (`00-plan.md`, `01-decisions-log.md`, `02-release-process.md`, `03-ci-pipeline.md`, `04-versioning-policy.md`, `05-contribution-and-governance.md`, `06-release-milestones.md`, `REVIEW.md`) |
+| 7 | MCP Integration | **not-started** (scaffolded) | 2 (`00-plan.md` *stub*, `01-decisions-log.md` *stub*) |
+| 8 | Skills Integration | **not-started** (scaffolded) | 2 (`00-plan.md` *stub*, `01-decisions-log.md` *stub*) |
 
 ## Adopted Decisions
 
@@ -23,6 +25,11 @@ unused); Phase 3 owns D31–D52 (D31–D52 adopted); Phase 4 owns D53–D66
 (D53–D66 adopted); Phase 5 owns D67–D80 (D67–D80 adopted); Phase 6 owns
 D81–D105 (D81–D105 adopted). All decision ranges are contiguous and
 non-overlapping.
+
+Phase 7 (MCP Integration) has reserved its first decision ID at **D106**;
+its last ID is `TBD` until the phase closes its range. Phase 8 (Skills
+Integration) will allocate its range contiguously after Phase 7 closes;
+neither first nor last ID is known yet.
 
 - **Phase 1 (approved):** D01–D14 adopted. D15 released.
 - **Phase 2 (approved):** D15–D28 adopted. D29, D30 released.
@@ -261,6 +268,11 @@ Decoupling grep clean. `REVIEW.md` verdict: **READY**.
 
 No open decisions in Phases 1–6.
 
+**Phases 7 and 8** have no adopted decisions yet — both are scaffolded
+and awaiting `plan-phase` activation. Their preliminary question lists
+are in `docs/phase-7-mcp-integration/00-plan.md` and
+`docs/phase-8-skills-integration/00-plan.md`.
+
 Two implementation-time questions are carried forward:
 - **Credential delivery mechanism** (Phase 5 REVIEW.md OQ1): whether
   credential is passed to `Invoker.Invoke` as a parameter, context value,
@@ -276,6 +288,11 @@ Two implementation-time questions are carried forward:
 - **First production consumer dependency** (seed §8 v1.0.0 criterion).
   v1.0.0 tag is gated on a production consumer shipping against v0.5.x
   (D91). This is by design.
+- **Phase 7 and Phase 8 block v1.0.0 freeze.** Both phases were added
+  after Phase 6 was approved, to decide MCP integration and provider-side
+  skills support before `v1.0.0`. Neither affects v0.1.0 / v0.3.0 /
+  v0.5.0 implementation, but the `v1.0.0` API freeze cannot complete
+  until both phases reach `approved`. Phase 8 is gated on Phase 7.
 
 ## Decoupling Contract Health
 
@@ -285,30 +302,44 @@ as actual identifiers. Occurrences are limited to negation-mentions inside
 compliance declarations and the banned-grep enforcement definition in
 `03-ci-pipeline.md`. Verified by the reviewer subagent in each phase pass.
 
+Phase 7 and Phase 8 scaffold stubs must pass the same grep when they are
+activated; initial review of the stub files is clean.
+
 The decoupling contract is a correctness invariant, not an amendable
 decision.
 
 ## Next Step
 
-**Resolve D10** (module path). Once the GitHub org is acquired and the
-brand review is complete, implementation begins with v0.1.0 — the first
-working invocation with the Anthropic provider.
+**Two parallel tracks, both pre-v1.0.0:**
+
+1. **Implementation track:** Resolve D10 (module path). Once the GitHub
+   org is acquired and the brand review is complete, implementation begins
+   with v0.1.0 — the first working invocation with the Anthropic provider.
+   v0.1.0 through v0.5.x do not depend on Phase 7 or Phase 8.
+2. **Planning track:** Run `plan-phase` on **Phase 7 — MCP Integration**.
+   Phase 8 (Skills Integration) is gated on Phase 7 approval. Both phases
+   must reach `approved` before the `v1.0.0` API freeze.
 
 ## Overall Status
 
-**All 6 design phases are approved** with a clean decoupling contract and
-103 adopted decisions. All forward-carried concerns (C1–C4, CP1–CP6) are
-fully resolved. All 14 public interfaces are at `frozen-v1.0`. The CI
-pipeline, release process, versioning policy, contribution model, and
-community governance are fully specified.
+**Phases 1–6 are approved** with a clean decoupling contract and 103
+adopted decisions. All forward-carried concerns (C1–C4, CP1–CP6) are
+fully resolved. All 14 originally planned public interfaces are at
+`frozen-v1.0`. The CI pipeline, release process, versioning policy,
+contribution model, and community governance are fully specified.
+
+**Phases 7–8** are scaffolded (`not-started`) and block the `v1.0.0`
+freeze on the MCP and provider-skills axes. Neither phase affects v0.1.0,
+v0.3.0, or v0.5.0 implementation.
 
 **v0.1.0** (first working invocation) requires D10 resolution.
 **v0.3.0** (interfaces stable) requires hooks, filters, budget, streaming,
 and OpenAI adapter.
 **v0.5.0** (feature complete) requires all features, conformance green,
 benchmarks green.
-**v1.0.0** (API freeze) requires a production consumer to ship against a
-v0.5.x tag — a dependency outside any design phase.
+**v1.0.0** (API freeze) requires (a) a production consumer to ship against
+a v0.5.x tag (dependency outside any design phase, D91), **and** (b) both
+Phase 7 and Phase 8 to reach `approved`.
 
 Adopted decisions in every phase remain amendable via the protocol recorded
 in each phase's decision log. Implementation may begin.

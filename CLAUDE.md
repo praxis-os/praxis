@@ -66,7 +66,7 @@ sections):**
 
 ### Planning Phases
 
-The design of `praxis v1.0` is broken into 6 planning phases:
+The design of `praxis v1.0` is broken into 8 planning phases:
 
 1. **API Scope and Positioning** — what praxis is, positioning vs existing Go
    libraries, design principles, target consumers, what v1.0 commits to, what is
@@ -90,8 +90,18 @@ The design of `praxis v1.0` is broken into 6 planning phases:
    (conventional commits + release-please), CI pipeline (lint, test, coverage,
    benchmarks, banned-identifier grep, govulncheck, codeql), contribution model,
    code of conduct, RFC process.
+7. **MCP Integration** — whether and how praxis supports the Model Context
+   Protocol at v1.0.0 (in-tree adapter vs. pattern-only), integration model via
+   `tools.Invoker`, credential flow, transport priority, observability extensions,
+   trust-boundary classification, compatibility with the "no plugins in v1"
+   commitment (D09). Added after Phase 6 was approved; blocks v1.0.0 freeze.
+8. **Skills Integration** — whether and how praxis supports the provider-side
+   "skills" concept at v1.0.0 (first-class type vs. convention vs. non-goal),
+   relationship to `LLMProvider` and `tools.Invoker`, budget participation,
+   observability additions, DX and terminology disambiguation. Depends on
+   Phase 7; blocks v1.0.0 freeze.
 
-Implementation begins only after Phase 6 is approved. Release targets:
+Implementation begins only after **all 8 planning phases are approved**. Release targets:
 
 - **v0.1.0** — first working invocation with Anthropic provider, no hooks, no filters,
   no budget. First consumable tag.
@@ -120,6 +130,8 @@ All phase output files use a two-digit numbered prefix for reading order:
 - `docs/phase-4-observability-errors/`
 - `docs/phase-5-security-trust/`
 - `docs/phase-6-release-governance/`
+- `docs/phase-7-mcp-integration/`
+- `docs/phase-8-skills-integration/`
 
 ### Phase States
 
@@ -140,6 +152,18 @@ code, godoc on every exported symbol.
 
 ### Current Status
 
-Planning has not yet started. The only artifact is `docs/PRAXIS-SEED-CONTEXT.md`
-(frozen baseline from project extraction). Next step: run `plan-phase` on Phase 1
-"API Scope and Positioning".
+Phases 1–6 are `approved` with a clean decoupling contract and 103 adopted
+decisions (D01–D105). All 14 originally planned public interfaces are at
+`frozen-v1.0`.
+
+Two additional phases have been scaffolded and block the `v1.0.0` freeze:
+
+- **Phase 7 — MCP Integration** (`not-started`) — decides whether and how
+  praxis supports the Model Context Protocol at v1.0.0. Decision range
+  reserved from `D106`.
+- **Phase 8 — Skills Integration** (`not-started`) — decides whether and how
+  praxis supports the provider-side "skills" concept at v1.0.0. Decision
+  range starts immediately after Phase 7 closes.
+
+Next step: run `plan-phase` on Phase 7 "MCP Integration". Phase 8 activation
+is gated on Phase 7 approval.
