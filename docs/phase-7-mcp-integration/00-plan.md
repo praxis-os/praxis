@@ -1,11 +1,10 @@
 # Phase 7: MCP Integration
 
-> **Status:** scaffolded — awaiting `plan-phase` skill run.
-> This file is a scoping stub. It was created before the phase was formally
-> activated to record the initial intent, preliminary scope, and open
-> questions that Phase 7 must resolve. When `plan-phase` is invoked on this
-> phase, this file will be overwritten with the full planning artifact
-> following the same structure as Phases 1–6.
+> **Status:** `approved` — activated 2026-04-10, approved 2026-04-10
+> after one reviewer pass + in-place amendments. Decision range
+> **D106–D121** (16 decisions, contiguous). `REVIEW.md` verdict:
+> **READY**. See `docs/roadmap-status.md` for overall phase table.
+> Phase 8 (Skills Integration) is now unblocked and opens at D122.
 
 ## Goal
 
@@ -148,18 +147,33 @@ recorded in `01-decisions-log.md`.
 
 ## Deliverables
 
-Once the phase is activated, the expected deliverables are:
+Status as of 2026-04-10 (phase **approved**):
 
-- `00-plan.md` — this file, rewritten as the full plan.
-- `01-decisions-log.md` — D106 onward.
-- `02-scope-and-positioning.md` — first-class vs. pattern-only decision
-  with rationale.
-- `03-integration-model.md` — how MCP plugs into `tools.Invoker`,
-  including error flow, budget flow, credential flow.
-- `04-security-and-credentials.md` — trust-boundary analysis, credential
-  mapping, untrusted-output extension.
-- `05-non-goals.md` — things Phase 7 explicitly declines to support.
-- `REVIEW.md` — reviewer + `review-phase` verdict.
+- `00-plan.md` — this file. Phase scoping + working-loop tracker.
+- `01-decisions-log.md` — ✅ **approved.** D106–D121 adopted
+  (16 decisions, contiguous).
+- `02-scope-and-positioning.md` — ✅ **approved.** First-class shipped
+  as a separately-versioned sub-module at
+  `github.com/praxis-go/praxis/mcp`.
+- `03-integration-model.md` — ✅ **approved.** Package layout, public
+  API, namespacing, budget flow, error translation, content
+  flattening, observability extensions, testability via the SDK's
+  `InMemoryTransport`.
+- `04-security-and-credentials.md` — ✅ **approved.** Trust-boundary
+  classification, credential flow for long-lived sessions with the
+  accepted Phase 5 §3.2 goroutine-scope deviation for HTTP transport,
+  `SignedIdentity` propagation policy, stdio hardening including
+  SIGPIPE.
+- `05-non-goals.md` — ✅ **approved.** Ten non-goals catalogued,
+  binding for `praxis/mcp v1.0.0`; Non-goal 7.3 includes the explicit
+  `tools/list_changed` "ignore" posture.
+- `research-solutions.md` — ✅ **approved (verified pass).** Replaced
+  with the solution-researcher's sourced output; two of three D107
+  preconditions closed (license ✓, stability statement ✓); only the
+  transitive dep audit remains as an implementation-phase gate.
+- `REVIEW.md` — ✅ **verdict: READY.** Ten important weaknesses from
+  the reviewer pass addressed in-place via amendments dated
+  2026-04-10; no critical issues.
 
 ## Recommended Subagents
 

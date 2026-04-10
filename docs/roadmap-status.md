@@ -8,338 +8,188 @@
 | # | Phase | Status | Artifacts |
 |---|-------|--------|-----------|
 | 0 | Seed Context | starting baseline (amendable via decision-log amendment) | 1 (`docs/PRAXIS-SEED-CONTEXT.md`) |
-| 1 | API Scope and Positioning | **approved** | 7 (`00-plan.md`, `01-decisions-log.md`, `02-positioning-and-principles.md`, `03-non-goals.md`, `04-v1-freeze-surface.md`, `05-seed-question-resolutions.md`, `06-composition-patterns.md`, `REVIEW.md`) |
-| 2 | Core Runtime Design | **approved** | 8 (`00-plan.md`, `01-decisions-log.md`, `02-state-machine.md`, `03-streaming-and-events.md`, `04-cancellation-and-context.md`, `05-concurrency-model.md`, `06-state-machine-invariants.md`, `REVIEW.md`) |
-| 3 | Interface Contracts | **approved** | 14 (`00-plan.md`, `01-decisions-log.md`, `02-orchestrator-api.md`, `03-llm-provider.md`, `04-hooks-and-filters.md`, `05-budget-interfaces.md`, `06-tools-and-invocation-context.md`, `07-errors-and-classifier.md`, `08-telemetry-interfaces.md`, `09-credentials-and-identity.md`, `10-state-types.md`, `11-defaults-and-construction.md`, `go-architect-package-layout.md`, `REVIEW.md`) |
-| 4 | Observability and Error Model | **approved** | 9 (`00-plan.md`, `01-decisions-log.md`, `02-span-tree.md`, `03-metrics.md`, `04-slog-redaction.md`, `05-error-event-mapping.md`, `06-filter-event-mapping.md`, `go-architect-validation.md`, `REVIEW.md`) |
-| 5 | Security and Trust Boundaries | **approved** | 8 (`00-plan.md`, `01-decisions-log.md`, `02-credential-lifecycle.md`, `03-identity-signing.md`, `04-trust-boundaries.md`, `05-security-invariants.md`, `go-architect-validation.md`, `REVIEW.md`) |
-| 6 | Release, Versioning and Community Governance | **approved** | 8 (`00-plan.md`, `01-decisions-log.md`, `02-release-process.md`, `03-ci-pipeline.md`, `04-versioning-policy.md`, `05-contribution-and-governance.md`, `06-release-milestones.md`, `REVIEW.md`) |
-| 7 | MCP Integration | **not-started** (scaffolded) | 2 (`00-plan.md` *stub*, `01-decisions-log.md` *stub*) |
+| 1 | API Scope and Positioning | **approved** | 8 (incl. `REVIEW.md`) |
+| 2 | Core Runtime Design | **approved** | 8 (incl. `REVIEW.md`) |
+| 3 | Interface Contracts | **approved** | 14 (incl. `REVIEW.md`) |
+| 4 | Observability and Error Model | **approved** | 9 (incl. `REVIEW.md`) |
+| 5 | Security and Trust Boundaries | **approved** | 8 (incl. `REVIEW.md`) |
+| 6 | Release, Versioning and Community Governance | **approved** | 8 (incl. `REVIEW.md`) |
+| 7 | MCP Integration | **approved** | 8 (`00-plan.md`, `01-decisions-log.md`, `02-scope-and-positioning.md`, `03-integration-model.md`, `04-security-and-credentials.md`, `05-non-goals.md`, `research-solutions.md`, `REVIEW.md`) |
 | 8 | Skills Integration | **not-started** (scaffolded) | 2 (`00-plan.md` *stub*, `01-decisions-log.md` *stub*) |
 
 ## Adopted Decisions
 
-**103 decisions adopted** across Phases 1–6. Phase 1 owns D01–D15 (D15
-released unused); Phase 2 owns D15–D30 (D15–D28 adopted, D29/D30 released
-unused); Phase 3 owns D31–D52 (D31–D52 adopted); Phase 4 owns D53–D66
-(D53–D66 adopted); Phase 5 owns D67–D80 (D67–D80 adopted); Phase 6 owns
-D81–D105 (D81–D105 adopted). All decision ranges are contiguous and
-non-overlapping.
+**119 decisions adopted** across Phases 1–7.
 
-Phase 7 (MCP Integration) has reserved its first decision ID at **D106**;
-its last ID is `TBD` until the phase closes its range. Phase 8 (Skills
-Integration) will allocate its range contiguously after Phase 7 closes;
-neither first nor last ID is known yet.
+| Phase | Range | Adopted | Notes |
+|---|---|---|---|
+| 1 | D01–D15 | D01–D14 | D15 released unused |
+| 2 | D15–D30 | D15–D28 | D29, D30 released unused |
+| 3 | D31–D52 | D31–D52 | full range |
+| 4 | D53–D66 | D53–D66 | full range |
+| 5 | D67–D80 | D67–D80 | full range |
+| 6 | D81–D105 | D81–D105 | full range |
+| 7 | D106–D121 | D106–D121 | full range (D121 added during reviewer pass for the release-pipeline amendment obligation) |
 
-- **Phase 1 (approved):** D01–D14 adopted. D15 released.
-- **Phase 2 (approved):** D15–D28 adopted. D29, D30 released.
-- **Phase 3 (approved):** D31–D52 adopted. D51 resolved the package layout
-  (facade in `orchestrator/` sub-package, types in root). D52 recorded
-  three seed amendments (interface->struct, 21-event vocabulary, PriceProvider
-  promotion).
-- **Phase 4 (approved):** D53–D66 adopted. D53 defines the OTel span tree
-  (1 root + 6 child spans). D54 resolves C1 (full `trace.Span` in
-  `DetachedWithSpan`). D55 resolves CP1 (span links for nested orchestrators).
-  D56 resolves CP2 (`parent_invocation_id` as span attribute). D57 defines
-  10 Prometheus metrics with bounded cardinality. D58 places `RedactingHandler`
-  in `telemetry/slog/`. D59 maps FilterDecision to content-analysis events.
-  D60 defines AttributeEnricher flow with hard cardinality boundary. D61 maps
-  ErrorKind to terminal EventType 1:1. D62 resolves C3 (token-overshoot
-  godoc). D63 resolves CP5 (classifier identity rule). D64 defines VerdictLog
-  emission via AuditNote field. D65 formally amends Phase 3 InvocationEvent
-  (6 new fields) and adds WithMetricsRecorder option. D66 commits signal-term
-  lists to frozen-v1.0.
-- **Phase 5 (approved):** D67–D80 adopted. D67 mandates `runtime.KeepAlive`-
-  fenced zeroing for `Credential.Close()`. D68 ships `credentials.ZeroBytes`
-  utility. D69 resolves C4 (soft-cancel credential context via
-  `context.WithoutCancel` + 500ms timeout). D70–D71 define mandatory JWT
-  registered claims (iss, sub, exp, iat, jti) and custom claims
-  (praxis.invocation_id, praxis.tool_name). D72 sets configurable token
-  lifetime (60s default, [5s, 300s] range). D73 specifies `NewEd25519Signer`
-  constructor (stdlib-only, EdDSA algorithm). D74 documents static key model
-  with `kid` header support. D75 resolves CP6 (identity chaining via
-  `praxis.parent_token` claim). D76 promotes `identity.Signer` to
-  `frozen-v1.0`. D77 formalises untrusted tool output model. D78 classifies
-  filter trust boundaries (PostToolFilter = boundary-crossing, PreLLMFilter =
-  boundary-internal). D79 extends RedactingHandler deny-list with
-  `praxis.signed_identity` and `_jwt` suffix. D80 enumerates 26 security
-  invariants across 4 categories (C1–C8, I1–I6, T1–T7, O1–O5).
-- **Phase 6 (approved):** D81–D105 adopted. D81 sets deprecation window
-  (2 minors + 6 months). D82 adopts single-branch strategy. D83 enforces
-  conventional commits via commitsar. D84 configures release-please with
-  `release-type: go`. D85 specifies CI pipeline (6 required + 2 informational
-  PR checks, 2 nightly, 1 release). D86 sets 85% coverage gate on all
-  packages. D87–D88 define property-test and conformance-suite CI policies.
-  D89 enforces D10 tripwire (module path before first go.mod). D90 defines
-  bus-factor mitigation (design docs + exec specs + onboarding checklist).
-  D91 gates v1.0.0 on production consumer attestation. D92 adopts DCO via
-  probot/dco. D93 sets PR review policy. D94 requires squash merge + 6
-  required checks. D95 defines RFC process via GitHub Discussions
-  (post-v1.0 only). D96 specifies SECURITY.md with 90-day disclosure
-  timeline and OI-1/OI-2 known limitations. D97 enforces SPDX headers.
-  D98 uses lightweight tags + GitHub attestations. D99 records internal/jwt
-  in canonical package layout. D100 confirms MetricsRecorderV2 embedding
-  pattern. D101 places JWT claim constants in internal/jwt with
-  architectural enforcement. D102 defines v0.x breaking-change
-  communication channels. D103 specifies release milestone exit criteria.
-  D104 implements seed §14.2 v0.x interface-change review requirement.
-  D105 defines benchmark baseline cache workflow.
-
-Adopted decisions remain **amendable** via the protocol recorded in
-`docs/phase-1-api-scope/01-decisions-log.md#amendment-protocol`. The
-three-tier stability policy (D13) governs interface freezes separately
-from methodological-decision amendability.
+Phase 8 (Skills Integration) reserves its first decision ID at **D122**
+when the phase is activated by `plan-phase`. All decision ranges are
+contiguous and non-overlapping.
 
 ## Completed Work
 
-**Phase 1 — API Scope and Positioning (approved).** 14 decisions (D01–D14):
-positioning statement, eight design principles (seven from seed + the
-zero-wiring smoke path principle), target consumer archetype and three
-anti-personas, v1.0 freeze surface (12/14 interfaces at `frozen-v1.0`,
-two at `stable-v0.x-candidate`), seven non-goals, tool-name placement on
-`ToolCall` (seed §13.1), `ApprovalRequiredError` terminal semantics (seed
-§13.2), `PriceProvider` per-invocation snapshot policy (seed §13.3), "no
-plugins in v1" re-confirmed (seed §13.4), conditional adoption of the name
-`praxis` / module `github.com/praxis-go/praxis` with a Phase 3 tripwire,
-positioning gaps catalogued, zero-wiring smoke-test promise, three-tier
-stability policy, Azure OpenAI best-effort parity. All four seed §13 open
-questions resolved. Decoupling grep clean. `REVIEW.md` verdict: **READY**.
+**Phase 1 — API Scope and Positioning.** Charter, positioning, design
+principles, target consumer archetype and anti-persona, v1.0 freeze
+surface (twelve interfaces frozen at v1.0, two held as
+`stable-v0.x-candidate`), seven non-goals, "no plugins in v1"
+re-confirmed as D09.
 
-**Phase 2 — Core Runtime Design (approved).** 14 decisions (D15–D28):
+**Phase 2 — Core Runtime Design.** 13-state typed invocation machine
+with property-based test harness, 16-event streaming channel,
+two-flavor cancellation model, four-layer context model,
+approval-required terminal state added alongside the existing
+`Completed/Failed/Cancelled/BudgetExceeded` terminals.
 
-- **D15 — 14-state machine** (9 non-terminal + 5 terminal).
-- **D16 — Transition allow-list** with full adjacency table.
-- **D17 — `ApprovalRequired` is a distinct terminal state.**
-- **D18 — 19 `InvocationEvent` types** (later expanded to 21 via D52b).
-- **D19 — Streaming channel close protocol** (`sync.Once`-guarded).
-- **D20 — Backpressure via `select + ctx.Done()`.**
-- **D21 — Soft vs. hard cancel precedence matrix.**
-- **D22 — Terminal lifecycle-emission invariant** (5-second detached context).
-- **D23 — Four-layer context propagation.**
-- **D24 — One goroutine per invocation, sole-producer rule.**
-- **D25 — Budget wall-clock boundary** (starts at Initializing, stops at terminal).
-- **D26 — PriceProvider snapshot at Initializing entry.**
-- **D27 — Zero-wiring streaming event set** (10 events single-turn).
-- **D28 — 21 property-based invariants.**
-- D29, D30 released unused.
-- Five forward-carried concerns documented (C1–C5).
+**Phase 3 — Interface Contracts.** All original seed §5 interfaces at
+`frozen-v1.0` (including `credentials.Resolver`, `tools.Invoker`,
+`llm.Provider`, `hooks.*`, `budget.Guard`/`budget.PriceProvider`,
+`errors.TypedError`/`errors.Classifier`,
+`telemetry.LifecycleEventEmitter`/`telemetry.AttributeEnricher`,
+`identity.Signer`) plus `MetricsRecorder`, plus `InvocationContext`
+specified in detail. Canonical package layout committed.
 
-**Phase 3 — Interface Contracts (approved).** 22 decisions (D31–D52):
-complete Go interface definitions for all 14 public interfaces, type
-placements, package layout, constructor pattern, null implementations,
-composition properties (CP1–CP6). D51 resolved the package layout. D52
-recorded three seed amendments.
+**Phase 4 — Observability and Error Model.** OTel span tree (one root
++ six child spans, `praxis.*` namespace), 10 Prometheus metrics with
+hard cardinality bounds, `AttributeEnricher` vs metric-label
+boundary, `slog` redaction handler with static deny-list, eight-type
+typed error taxonomy + event mapping, filter-phase event mapping,
+`DetachedWithSpan` helper for terminal-event emission under Layer 4
+context.
 
-**Phase 4 — Observability and Error Model (approved).** 14 decisions
-(D53–D66):
+**Phase 5 — Security and Trust Boundaries.** Zero-on-close credential
+lifecycle with `runtime.KeepAlive` pattern and `credentials.ZeroBytes`
+utility, `context.WithoutCancel` + 500 ms deadline soft-cancel
+credential fetch path, Ed25519 JWT signing with three praxis-specific
+claims, trust-boundary classification of filter positions (`PreLLMFilter`
+internal vs `PostToolFilter` crossing), untrusted tool output contract,
+`RedactingHandler` deny-list extensions, five load-bearing security
+invariants.
 
-- **D53 — OTel span tree:** 1 root span (`praxis.invocation`) + 6 child
-  spans for I/O-bound phases. No span for `ToolDecision` (sub-microsecond
-  CPU work). `ApprovalRequired` maps to `StatusOK`.
-- **D54 — C1 resolved:** `DetachedWithSpan(span trace.Span, deadline
-  time.Duration)` carries full span for terminal attribute writes.
-- **D55 — CP1 resolved:** span links (not child spans) for nested
-  orchestrators, avoiding lifetime mismatches and depth limits.
-- **D56 — CP2 resolved:** `praxis.parent_invocation_id` as framework-
-  injected span attribute.
-- **D57 — 10 Prometheus metrics** with `praxis_` prefix, all labels
-  bounded, ~1,032 worst-case time series. Hard cardinality boundary:
-  enricher attributes -> spans only, never metric labels.
-- **D58 — slog integration:** `RedactingHandler` in `telemetry/slog/`
-  sub-package. Never-log list covers credentials, raw content, PII.
-- **D59 — FilterDecision -> content-analysis event mapping:** reason-driven
-  trigger logic, emission before enclosing state-transition events.
-- **D60 — AttributeEnricher flow:** Enrich called once at Initializing
-  (after root span opened), attributes to spans and
-  `InvocationEvent.EnricherAttributes`, never to metric labels.
-- **D61 — Error-to-event mapping:** 1:1 ErrorKind -> terminal EventType.
-  First-error-wins arbitration via state machine immutability.
-- **D62 — C3 resolved:** BudgetExceededError godoc amended with
-  token-overshoot caveat.
-- **D63 — CP5 resolved:** classifier identity rule (`errors.As` first)
-  with four worked examples.
-- **D64 — VerdictLog emission:** AuditNote field on hook-completion events,
-  no new EventType constant.
-- **D65 — Phase 3 amendments:** 6 new InvocationEvent fields + 
-  WithMetricsRecorder option, formally recorded.
-- **D66 — Signal-term stability:** frozen-v1.0 commitment on PII and
-  injection signal-term lists.
+**Phase 6 — Release, Versioning and Community Governance.** Linear-
+history merge policy (D81), commitsar conventional-commit validator
+(D82), trunk-based development (D83), release-please configuration
+with `go` release type and `version.go` extra-file (D84), CI pipeline
+with banned-grep + spdx-check + dco + govulncheck (D85), 85 % coverage
+gate across all packages (D86), SPDX license headers, governance model
+codified, CODEOWNERS, CHANGELOG policy, contribution flow, v0.1.0
+through v1.0.0 milestone checklists (D96), plus Phase 4 back-annotation
+decisions D99–D105.
 
-Phase 4 resolved all five forward-carried concerns: C1 (D54), C3 (D62),
-CP1 (D55), CP2 (D56), CP5 (D63). Decoupling grep clean.
-`REVIEW.md` verdict: **READY**.
-
-**Phase 5 — Security and Trust Boundaries (approved).** 14 decisions
-(D67–D80):
-
-- **D67 — Credential zeroing:** `runtime.KeepAlive`-fenced byte-slice
-  overwrite. Prevents dead-store elision by the Go compiler.
-- **D68 — `credentials.ZeroBytes` utility:** exported helper centralises
-  the zeroing pattern for third-party `Credential` implementations.
-- **D69 — C4 resolved:** soft-cancel credential context uses
-  `context.WithoutCancel` + 500ms `context.WithTimeout` so credential
-  resolution is not hard-cancelled during graceful shutdown.
-- **D70 — JWT registered claims:** 5 mandatory (`iss`, `sub`, `exp`,
-  `iat`, `jti`), 2 optional (`aud`, `nbf` omitted). `iss` defaults to
-  `"praxis"`; production callers must set via `WithIssuer`.
-- **D71 — JWT custom claims:** `praxis.invocation_id` and
-  `praxis.tool_name` mandatory. `WithExtraClaims(map[string]any)` for
-  static caller claims; mandatory claims win on collision.
-- **D72 — Token lifetime:** configurable, 60s default, [5s, 300s] range.
-  Out-of-range values rejected at construction time with error.
-- **D73 — Ed25519 reference impl:** `NewEd25519Signer(key, ...SignerOption)
-  (Signer, error)`. Stdlib-only: `crypto/ed25519`, `encoding/json`,
-  `encoding/base64`, `crypto/rand`. JOSE header: `{"alg":"EdDSA","typ":"JWT"}`.
-- **D74 — Key lifecycle:** static key model in reference impl. `kid` header
-  for verifier key selection. Rotation requires caller-implemented Signer.
-- **D75 — CP6 resolved:** identity chaining via `praxis.parent_token`
-  payload claim containing the outer JWT string. Chain depth: documentation
-  recommendation of 3 levels, not enforced.
-- **D76 — `identity.Signer` promoted to `frozen-v1.0`.** All gating
-  conditions satisfied (D70–D75).
-- **D77 — Untrusted tool output model:** `ToolResult.Content` untrusted by
-  contract. Framework passes through `PostToolFilter`, honors Block, never
-  inspects content for security patterns.
-- **D78 — Filter trust boundaries:** `PostToolFilter` is trust-boundary-
-  crossing (errors at ERROR). `PreLLMFilter` is trust-boundary-internal
-  (errors at WARN). Panic recovery via deferred `recover()` on all
-  hook/filter call sites.
-- **D79 — RedactingHandler amendments:** added `praxis.signed_identity` and
-  `_jwt` suffix to Phase 4 D58 deny-list.
-- **D80 — Security invariants:** 26 invariants in 4 categories (C1–C8
-  credential isolation, I1–I6 identity signing, T1–T7 trust boundaries,
-  O1–O5 observability safety) with traceability matrix.
-
-Phase 5 resolved C4 (D69) and CP6 (D75) — the last two forward-carried
-concerns from Phase 2/3. All interfaces now at `frozen-v1.0`.
-Two open issues documented for post-v1.0: OI-1 (private key in-memory
-lifetime) and OI-2 (enricher attribute log-injection vector).
-Decoupling grep clean. `REVIEW.md` verdict: **READY**.
-
-**Phase 6 — Release, Versioning and Community Governance (approved).** 25
-decisions (D81–D105):
-
-- **D81 — Deprecation window:** 2 minor releases + 6 calendar months,
-  whichever is longer. Removal requires v2 module path.
-- **D82 — Branch strategy:** single `main` branch; release branches only
-  if v1.x maintenance needed after v2.0.0.
-- **D83 — Conventional commits:** enforced via commitsar (Go-native).
-- **D84 — release-please:** `release-type: go`, changelog sections mapped
-  to keep-a-changelog convention, `version.go` extra-file.
-- **D85 — CI pipeline:** 6 required PR checks (lint, test, commitsar,
-  banned-grep, spdx-check, dco) + 2 informational (bench, govulncheck) +
-  2 nightly (property-tests, conformance) + 1 post-merge (bench-baseline)
-  + 1 release + CodeQL weekly.
-- **D86 — Coverage gate:** 85% on all packages including internal/.
-- **D87 — Property tests:** 10k iterations PR, 100k nightly with auto
-  issue creation on failure.
-- **D88 — LLM conformance:** nightly only, budget-capped ($0.50/run),
-  auto issue on failure.
-- **D89 — D10 tripwire:** module path must be resolved before first
-  go.mod commit. Fallbacks: praxis-kernel, invokekit.
-- **D90 — Bus-factor mitigation:** design docs, executable specs,
-  maintainer onboarding checklist.
-- **D91 — Production consumer gate:** v1.0.0 requires production consumer
-  attestation in dedicated release notes section.
-- **D92 — DCO:** Developer Certificate of Origin via probot/dco, no CLA.
-- **D93 — PR review:** 1 approval during v0.x (24-hour honor-system wait
-  for exported symbols); 2 approvals for frozen interfaces post-v1.0.
-- **D94 — Branch protection:** squash merge only, 6 required checks.
-- **D95 — RFC process:** GitHub Discussions, post-v1.0 only.
-- **D96 — SECURITY.md:** 90-day disclosure via GitHub private reporting,
-  OI-1 and OI-2 documented as known limitations.
-- **D97 — SPDX headers:** Apache-2.0 on all .go files, CI-enforced.
-- **D98 — Tag signing:** lightweight tags + GitHub attestations, no GPG.
-- **D99 — Package layout:** internal/jwt added to canonical layout.
-- **D100 — MetricsRecorder extension:** V2 embedding pattern for v1.x.
-- **D101 — JWT claim constants:** in internal/jwt, architectural
-  enforcement via single consumer site.
-- **D102 — v0.x breaking changes:** CHANGELOG + Discussion + migration
-  guide (for 3+ symbol changes).
-- **D103 — Release milestones:** concrete exit criteria for v0.1.0,
-  v0.3.0, v0.5.0, v1.0.0.
-- **D104 — v0.x interface review:** seed §14.2 implemented as
-  decisions-log entry requirement for interface changes.
-- **D105 — Bench baseline:** post-merge cache workflow for PR comparison.
-
-Decoupling grep clean. `REVIEW.md` verdict: **READY**.
+**Phase 7 — MCP Integration.** MCP ships as a separately-versioned Go
+sub-module at `github.com/praxis-go/praxis/mcp` (D106) reusing the
+official `modelcontextprotocol/go-sdk` (D107, conditional on license
+and stability verification). v1.0.0 transport set: stdio + Streamable
+HTTP (D108). D09 / Non-goal 7 re-confirmed (D109). Public API
+(D110): `Server`, sealed `Transport` + `TransportStdio` +
+`TransportHTTP`, `Option`, `WithResolver` / `WithMetricsRecorder` /
+`WithTracerProvider` / `WithMaxResponseBytes`, `New`, `Invoker io.Closer`.
+Tool namespacing `{LogicalName}__{mcpToolName}` with `__` prohibited
+inside `LogicalName` (D111). Budget participation via existing
+`wall_clock` + `tool_calls` dimensions only, with a 16 MiB
+`MaxResponseBytes` adapter-local resource guard (D112). Error
+translation maps all MCP failures to `ErrorKindTool` sub-kinds
+including OAuth 401/403, HTTP 429, handshake timeout, TLS failure
+(D113). Content flattening to text-only newline-joined output (D114).
+MCP-specific metrics via a standalone `mcp.MetricsRecorder` interface
+detected by type assertion (not D100 embedding), with 32-server cap
+(D115). MCP transport edge classified as a Phase 5 trust boundary
+handled by existing `PostToolFilter` contract (D116). Credential flow:
+first-call fetch + session-reuse with explicit accepted deviation from
+the Phase 5 §3.2 goroutine-scope isolation invariant for HTTP transport
+(D117). `SignedIdentity` not forwarded to MCP servers in v1.0.0 (D118).
+stdio transport hardening: absolute command resolution, env-var buffer
+zeroing, pipe redirection, process-group isolation, `EPIPE`/SIGPIPE
+handling, operator obligation for resource limits (D119). Ten non-goals
+binding for `praxis/mcp v1.0.0` (D120). Phase 6 release-pipeline
+amendment obligation recorded as a new decision so the
+"independently-versioned sub-module" claim in D106 has a concrete
+pipeline foundation (D121).
 
 ## Open Decisions
 
-No open decisions in Phases 1–6.
+None blocking at the Phase 7 level. The following items are explicit
+forward-carries that belong to later work:
 
-**Phases 7 and 8** have no adopted decisions yet — both are scaffolded
-and awaiting `plan-phase` activation. Their preliminary question lists
-are in `docs/phase-7-mcp-integration/00-plan.md` and
-`docs/phase-8-skills-integration/00-plan.md`.
-
-Two implementation-time questions are carried forward:
-- **Credential delivery mechanism** (Phase 5 REVIEW.md OQ1): whether
-  credential is passed to `Invoker.Invoke` as a parameter, context value,
-  or via direct `Resolver.Fetch` call by the invoker.
-- **`praxis_errors_total` naming** (Phase 4 REVIEW.md M3): metric counts
-  `approval_required` which is not an error. Deferred to post-v1.0.
+- **Phase 7 implementation-phase preconditions (D107).** Before the
+  first `praxis/mcp` `go.mod` commit, verify (a) official SDK license
+  is Apache-2.0-compatible, (b) transitive dependency footprint is
+  acceptable, (c) written v1 stability statement exists. Failure on
+  any precondition re-opens D107.
+- **D121 pipeline diff must be applied to the repository** before any
+  `praxis/mcp` tag is cut. This is an implementation-phase obligation,
+  not a planning-phase blocker.
+- **Phase 8 (Skills Integration)** is still `not-started`. Activation
+  is gated on Phase 7 approval, which is now in place. Next working
+  loop: run `plan-phase` on Phase 8.
 
 ## Risks / Blockers
 
-- **D10 external dependency** (carried from Phase 1). Name/module-path
-  resolution is conditional. Phase 3 used `MODULE_PATH_TBD` throughout;
-  v0.1.0 tag is gated on resolution (D89).
-- **First production consumer dependency** (seed §8 v1.0.0 criterion).
-  v1.0.0 tag is gated on a production consumer shipping against v0.5.x
-  (D91). This is by design.
-- **Phase 7 and Phase 8 block v1.0.0 freeze.** Both phases were added
-  after Phase 6 was approved, to decide MCP integration and provider-side
-  skills support before `v1.0.0`. Neither affects v0.1.0 / v0.3.0 /
-  v0.5.0 implementation, but the `v1.0.0` API freeze cannot complete
-  until both phases reach `approved`. Phase 8 is gated on Phase 7.
+- **R1 — `research-solutions.md` `[verify]` markers.** Phase 7's
+  research artifact was produced under time pressure after the
+  solution-researcher subagent stalled. Multiple factual claims about
+  the official Go MCP SDK (exact license, transitive-dep count,
+  written stability statement) are `[verify]`-tagged and must be
+  independently verified before the first `praxis/mcp go.mod` commit.
+  D107 records the preconditions; the `REVIEW.md` recommendations
+  restate them.
+- **R2 — SDK concurrency guarantee is unverified.** If the official
+  MCP Go SDK is not safe for concurrent `tools/call` on a single
+  session, the adapter's per-server mutex fallback will serialise
+  same-server tool calls, partially defeating Phase 2 D24 parallel
+  dispatch. Benchmarking obligation recorded in `REVIEW.md`.
+- **R3 — HTTP-transport credential goroutine-scope invariant is
+  breached.** Phase 5 §3.2's structural invariant does not hold for
+  HTTP transport in the MCP adapter; this is an **accepted deviation**
+  (D117), not a blocker, and is classified at the same tier as D67
+  §4.3. Consumers with strict isolation requirements use stdio
+  transport exclusively.
+- **R4 — Pattern precedent risk.** Phase 7 establishes the
+  "standalone optional interface + type assertion" pattern for
+  sub-module metrics (D115). Phase 8 should use the same pattern for
+  consistency. If Phase 8 diverges, the praxis sub-module extension
+  story becomes fragmented.
+
+No blockers prevent Phase 8 from starting. No blockers prevent v0.1.0
+or v0.3.0 implementation work.
 
 ## Decoupling Contract Health
 
-**PASS.** A case-insensitive word-bounded grep against the seed §6.1
-banned-identifier set returns zero matches across all Phase 1–6 artifacts
-as actual identifiers. Occurrences are limited to negation-mentions inside
-compliance declarations and the banned-grep enforcement definition in
-`03-ci-pipeline.md`. Verified by the reviewer subagent in each phase pass.
-
-Phase 7 and Phase 8 scaffold stubs must pass the same grep when they are
-activated; initial review of the stub files is clean.
-
-The decoupling contract is a correctness invariant, not an amendable
-decision.
+**PASS across all approved phases.** The banned-identifier grep is
+clean over Phases 1–7 modulo meta-mentions (permitted quotations of
+banned identifiers inside compliance-check sections). No hardcoded
+consumer-brand names, no `governance_event`, no hardcoded framework
+identity attributes, no external-repo decision IDs or milestone codes,
+no consumer-specific file paths. Phase 7's `03-integration-model.md`
+§9 "Decoupling contract compliance" section contains a meta-mention
+consistent with the pattern used in prior phases' review files.
 
 ## Next Step
 
-**Two parallel tracks, both pre-v1.0.0:**
-
-1. **Implementation track:** Resolve D10 (module path). Once the GitHub
-   org is acquired and the brand review is complete, implementation begins
-   with v0.1.0 — the first working invocation with the Anthropic provider.
-   v0.1.0 through v0.5.x do not depend on Phase 7 or Phase 8.
-2. **Planning track:** Run `plan-phase` on **Phase 7 — MCP Integration**.
-   Phase 8 (Skills Integration) is gated on Phase 7 approval. Both phases
-   must reach `approved` before the `v1.0.0` API freeze.
+Run `plan-phase` on **Phase 8 — Skills Integration** to begin the
+provider-side skills analysis. Phase 8 inherits Phase 7's namespacing
+convention, credential flow, error taxonomy, and
+`MetricsRecorder`-style extension pattern as direct inputs.
 
 ## Overall Status
 
-**Phases 1–6 are approved** with a clean decoupling contract and 103
-adopted decisions. All forward-carried concerns (C1–C4, CP1–CP6) are
-fully resolved. All 14 originally planned public interfaces are at
-`frozen-v1.0`. The CI pipeline, release process, versioning policy,
-contribution model, and community governance are fully specified.
+**v0.1.0 (first working invocation) and v0.3.0 (feature complete at
+v1.0-candidate interface shape)** are unblocked by planning — Phases
+1–6 are approved and specify everything the implementation needs to
+ship Anthropic + OpenAI providers, the full state machine, hooks,
+filters, budget, telemetry, and the release/CI pipeline.
 
-**Phases 7–8** are scaffolded (`not-started`) and block the `v1.0.0`
-freeze on the MCP and provider-skills axes. Neither phase affects v0.1.0,
-v0.3.0, or v0.5.0 implementation.
-
-**v0.1.0** (first working invocation) requires D10 resolution.
-**v0.3.0** (interfaces stable) requires hooks, filters, budget, streaming,
-and OpenAI adapter.
-**v0.5.0** (feature complete) requires all features, conformance green,
-benchmarks green.
-**v1.0.0** (API freeze) requires (a) a production consumer to ship against
-a v0.5.x tag (dependency outside any design phase, D91), **and** (b) both
-Phase 7 and Phase 8 to reach `approved`.
-
-Adopted decisions in every phase remain amendable via the protocol recorded
-in each phase's decision log. Implementation may begin.
+**v0.5.0 (production-consumer ready)** additionally requires
+Phases 7 and 8. Phase 7 is now **approved**, Phase 8 remains
+`not-started`; v0.5.0 is still on track but **the v1.0.0 freeze
+remains gated on Phase 8** per the charter's "all 8 planning phases
+approved before implementation begins" commitment. Phase 7's work
+gives Phase 8 its four required inputs.
