@@ -26,13 +26,13 @@ amendment.
 **Status:** decided
 **Summary:** MCP is a first-class, shipped integration delivered as
 a **separately-versioned Go sub-module** at
-`github.com/praxis-go/praxis/mcp`. Core `praxis` ships no MCP code
+`github.com/praxis-os/praxis/mcp`. Core `praxis` ships no MCP code
 and no MCP dependency.
 
 **Decision.** The praxis repository hosts a second Go module at
 `praxis/mcp/` with its own `go.mod`. That module implements
 `praxis/tools.Invoker` over the official MCP Go SDK and is
-consumed via `go get github.com/praxis-go/praxis/mcp`. The core
+consumed via `go get github.com/praxis-os/praxis/mcp`. The core
 module's `go.mod` and dependency graph are untouched by Phase 7.
 "First-class" means shipped in the same repo, under the same
 license, same CI, same reviewer set, and subject to its own v1.0.0
@@ -183,7 +183,7 @@ reflection-based extension.
 or Non-goal 7. All of the following are confirmed:
 
 - The adapter is imported at build time by explicit Go `import`.
-  Consumers who do not `import "github.com/praxis-go/praxis/mcp"`
+  Consumers who do not `import "github.com/praxis-os/praxis/mcp"`
   do not ship any MCP code.
 - The server set that an `Invoker` fronts is fixed at `New` time
   and is not mutable for the `Invoker`'s lifetime.

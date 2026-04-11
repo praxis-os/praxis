@@ -16,14 +16,14 @@ Phase 4 D60 (cardinality boundary).
 
 praxis ships **first-class support** for skill bundles as an
 **officially supported, separately-versioned Go sub-module** at
-`github.com/praxis-go/praxis/skills`.
+`github.com/praxis-os/praxis/skills`.
 
 This mirrors the Phase 7 D106 framework precisely:
 
-- The core module `github.com/praxis-go/praxis` ships **no** skill-loading
+- The core module `github.com/praxis-os/praxis` ships **no** skill-loading
   code and **no** YAML-parsing dependency. Zero-skills consumers pay
   zero transitive cost.
-- A second Go module, `github.com/praxis-go/praxis/skills`, lives in the
+- A second Go module, `github.com/praxis-os/praxis/skills`, lives in the
   same repository under a `skills/` directory with its own `go.mod`. It
   provides a typed `Skill` value and a filesystem loader, with composition
   utilities that wire loaded bundles into the core orchestrator via the
@@ -101,8 +101,8 @@ are not blocking D122.
 
 ### Binding rule
 
-The core module `github.com/praxis-go/praxis` **must not** import
-`github.com/praxis-go/praxis/skills` or any code from the `skills/`
+The core module `github.com/praxis-os/praxis` **must not** import
+`github.com/praxis-os/praxis/skills` or any code from the `skills/`
 directory. The direction of the module dependency is strictly one-way:
 
 ```
@@ -128,13 +128,13 @@ This mirrors D110 verbatim. The rationale is identical:
 ### Repository layout (additive to Phase 7)
 
 ```
-praxis/                            # core module (github.com/praxis-go/praxis)
+praxis/                            # core module (github.com/praxis-os/praxis)
 │   go.mod                         # unchanged by Phase 8
 │   ...
 ├── mcp/                           # Phase 7 sub-module (unchanged)
 │   ...
 └── skills/                        # Phase 8 sub-module
-    │   go.mod                     # module github.com/praxis-go/praxis/skills
+    │   go.mod                     # module github.com/praxis-os/praxis/skills
     │   go.sum
     │   doc.go                     # package-level documentation
     │   skill.go                   # Skill value type and read-only accessors
@@ -154,7 +154,7 @@ The `skills/go.mod` requires the parent module for the frozen interfaces:
 
 ```go
 require (
-    github.com/praxis-go/praxis v0.5.x  // or v1.0.0 once released
+    github.com/praxis-os/praxis v0.5.x  // or v1.0.0 once released
     // YAML parser — see §2.1 below
 )
 ```
@@ -348,7 +348,7 @@ intersection as a hard constraint on upstream bundle authors.
 
 ### Core module (unchanged)
 
-The core `github.com/praxis-go/praxis` module's public surface remains
+The core `github.com/praxis-os/praxis` module's public surface remains
 entirely at `frozen-v1.0`. Phase 8 adds **no types and no functions** to
 the core module. This is the binding constraint.
 

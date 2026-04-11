@@ -26,7 +26,7 @@ Two constructor entry points are shipped. The primary entry point is the
 // No scripts are executed. The bundle directory is treated as a closed unit:
 // no path may escape the root.
 //
-// Package: github.com/praxis-go/praxis/skills
+// Package: github.com/praxis-os/praxis/skills
 package skills
 
 // Open loads a skill bundle from the given filesystem rooted at root.
@@ -301,7 +301,7 @@ signature, or any core package.
 // error), which would otherwise have to be amended — a frozen-v1.0
 // change rejected by D125 and 02-scope-and-positioning.md §5.
 //
-// Package: github.com/praxis-go/praxis/skills
+// Package: github.com/praxis-os/praxis/skills
 func WithSkill(s *Skill) praxis.Option
 ```
 
@@ -575,7 +575,7 @@ frozen orchestrator type:
 // callers can validate the final text before paying the cost of an
 // orchestrator + LLM provider round trip.
 //
-// Package: github.com/praxis-go/praxis/skills
+// Package: github.com/praxis-os/praxis/skills
 func ComposedInstructions(opts ...praxis.Option) string
 ```
 
@@ -902,7 +902,7 @@ interface, following the D115 type-assertion pattern exactly:
 // `praxis_skills_loaded_total` counter exposes only the bounded
 // `status` label.
 //
-// Package: github.com/praxis-go/praxis/skills
+// Package: github.com/praxis-os/praxis/skills
 type MetricsRecorder interface {
     RecordSkillLoad(skillName, status string)
 }

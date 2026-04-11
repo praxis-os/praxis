@@ -12,11 +12,11 @@ Phase 5 `04-trust-boundaries.md`.
 ## 1. Module layout
 
 ```
-praxis/                            # core module (github.com/praxis-go/praxis)
+praxis/                            # core module (github.com/praxis-os/praxis)
 │   go.mod                         # unchanged by Phase 7
 │   ...
 └── mcp/                           # Phase 7 sub-module
-    │   go.mod                     # module github.com/praxis-go/praxis/mcp
+    │   go.mod                     # module github.com/praxis-os/praxis/mcp
     │   go.sum
     │   doc.go                     # package-level documentation
     │   invoker.go                 # Invoker implementation
@@ -33,12 +33,12 @@ praxis/                            # core module (github.com/praxis-go/praxis)
 ```
 
 The `mcp/` directory has its own `go.mod` declaring
-`module github.com/praxis-go/praxis/mcp`. It requires the parent
+`module github.com/praxis-os/praxis/mcp`. It requires the parent
 module for the frozen interfaces:
 
 ```go
 require (
-    github.com/praxis-go/praxis v0.5.x  // or v1.0.0 once released
+    github.com/praxis-os/praxis v0.5.x  // or v1.0.0 once released
     github.com/modelcontextprotocol/go-sdk v1.x
 )
 ```
@@ -66,7 +66,7 @@ type visible to the orchestrator.
 // re-constructing the Invoker. This is a deliberate consequence of
 // the core library's "no plugins in v1" commitment (core D09).
 //
-// Package: github.com/praxis-go/praxis/mcp
+// Package: github.com/praxis-os/praxis/mcp
 package mcp
 
 // Server describes a single MCP server to connect to.
@@ -475,7 +475,7 @@ The adapter adds **two** new metrics, both consumed via a narrow
 // across modules would require the core to know about the
 // extension. See D115 for the full rationale.
 //
-// Package: github.com/praxis-go/praxis/mcp
+// Package: github.com/praxis-os/praxis/mcp
 type MetricsRecorder interface {
     RecordMCPCall(server, transport, status string, duration time.Duration)
     RecordMCPTransportError(server, transport, kind string)

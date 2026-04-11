@@ -116,7 +116,7 @@ User-confirmed positions on the two load-bearing trade-offs:
 
 | ID   | Summary | Status |
 |------|---------|--------|
-| D122 | Positioning of skill-bundle support in v1.0: **first-class sub-module** at `github.com/praxis-go/praxis/skills` | **decided** |
+| D122 | Positioning of skill-bundle support in v1.0: **first-class sub-module** at `github.com/praxis-os/praxis/skills` | **decided** |
 | D123 | Canonical `SKILL.md` shape: required (`name`, `description`) + optional (`license`, `compatibility`, `metadata`, `allowed-tools`); permissive-preserve unknown-field policy via `Skill.Extensions() map[string]any` | **decided** |
 | D124 | Loader surface: `Open(fsys fs.FS, root string) (*Skill, []SkillWarning, error)` primary + `Load(path string)` wrapper; `LoadError` implementing full `errors.TypedError`; `SkillSubKind` named type | **decided** |
 | D125 | Composition surface: `skills.WithSkill(s *Skill) praxis.Option`; panic at orchestrator-construction time on duplicate-name collision; preserves frozen `NewOrchestrator` single-return signature; no `tools.Invoker` parameter | **decided** |

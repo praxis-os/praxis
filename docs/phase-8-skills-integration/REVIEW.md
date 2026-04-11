@@ -3,7 +3,7 @@
 ## Overall Assessment
 
 Phase 8 delivers a coherent, sourced, and internally consistent
-design for `github.com/praxis-go/praxis/skills`, a
+design for `github.com/praxis-os/praxis/skills`, a
 separately-versioned Go sub-module that loads installable
 `SKILL.md` skill bundles. After three adversarial reviewer passes
 (BLOCK → FAIL → PASS with non-blocking observations, both of

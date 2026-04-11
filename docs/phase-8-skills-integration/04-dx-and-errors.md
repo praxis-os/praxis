@@ -38,8 +38,8 @@ import (
     "context"
     "log"
 
-    "github.com/praxis-go/praxis"
-    "github.com/praxis-go/praxis/skills"
+    "github.com/praxis-os/praxis"
+    "github.com/praxis-os/praxis/skills"
 )
 
 func main() {
@@ -141,9 +141,9 @@ other at the package level.
 import (
     "context"
 
-    "github.com/praxis-go/praxis"
-    "github.com/praxis-go/praxis/mcp"
-    "github.com/praxis-go/praxis/skills"
+    "github.com/praxis-os/praxis"
+    "github.com/praxis-os/praxis/mcp"
+    "github.com/praxis-os/praxis/skills"
 )
 
 func build(ctx context.Context, llm praxis.LLMProvider, bundlePath string) *praxis.Orchestrator {
@@ -349,10 +349,10 @@ import (
     "log"
     "os"
 
-    "github.com/praxis-go/praxis"
-    "github.com/praxis-go/praxis/llm/anthropic"
-    "github.com/praxis-go/praxis/skills"
-    "github.com/praxis-go/praxis/tools"
+    "github.com/praxis-os/praxis"
+    "github.com/praxis-os/praxis/llm/anthropic"
+    "github.com/praxis-os/praxis/skills"
+    "github.com/praxis-os/praxis/tools"
 )
 
 func main() {
@@ -501,7 +501,7 @@ homonymous things.
 ### 5.1 README and godoc
 
 The top-level `README.md` of the praxis repository gets a short
-"Skills" section pointing at the `github.com/praxis-go/praxis/skills`
+"Skills" section pointing at the `github.com/praxis-os/praxis/skills`
 sub-module godoc, mirroring the treatment of `praxis/mcp` after
 Phase 7.
 

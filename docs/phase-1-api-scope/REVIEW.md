@@ -25,7 +25,7 @@ remains.
 ## Important Weaknesses
 
 1. **D10 is decided conditional, not unconditional.** The module path
-   `github.com/praxis-go/praxis` is the canonical path but depends on two
+   `github.com/praxis-os/praxis` is the canonical path but depends on two
    preconditions (GitHub org acquisition, brand review vs `usepraxis.app`
    in the adjacent runtime-governance space) that cannot be resolved inside
    a design phase. The tripwire in D10 prevents Phase 3 from embedding the

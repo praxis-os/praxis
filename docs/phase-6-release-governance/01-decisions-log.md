@@ -19,7 +19,7 @@ deprecated in any minor release. The deprecated symbol must remain functional
 for at least **two subsequent minor releases** and at least **six calendar
 months** from the release that introduced the deprecation notice, whichever is
 longer. Removal of the symbol is itself a breaking change requiring a v2 module
-path (`github.com/praxis-go/praxis/v2`).
+path (`github.com/praxis-os/praxis/v2`).
 
 Deprecation is signalled by:
 1. A `// Deprecated:` godoc comment on the symbol (per Go convention).

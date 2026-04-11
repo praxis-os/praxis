@@ -154,7 +154,7 @@ Status as of 2026-04-10 (phase **approved**):
   (16 decisions, contiguous).
 - `02-scope-and-positioning.md` — ✅ **approved.** First-class shipped
   as a separately-versioned sub-module at
-  `github.com/praxis-go/praxis/mcp`.
+  `github.com/praxis-os/praxis/mcp`.
 - `03-integration-model.md` — ✅ **approved.** Package layout, public
   API, namespacing, budget flow, error translation, content
   flattening, observability extensions, testability via the SDK's

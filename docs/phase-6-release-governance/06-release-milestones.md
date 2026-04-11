@@ -209,7 +209,7 @@ suite green, benchmarks green. Ready for the first production consumer.
 
 ## 4. v0.7.0 — MCP Integration
 
-**Goal:** ship the `github.com/praxis-go/praxis/mcp` sub-module as its own
+**Goal:** ship the `github.com/praxis-os/praxis/mcp` sub-module as its own
 independently-tagged release, implementing Phase 7 decisions D106–D121.
 The core module's public surface is unchanged at its v0.5.x shape; the
 sub-module is additive and lives behind its own go-module boundary.
@@ -239,7 +239,7 @@ sub-module is additive and lives behind its own go-module boundary.
 - [ ] Release-please configuration commit cites **D121** in its message.
 
 **Sub-module public API (D106, D109, D110):**
-- [ ] `praxis/mcp` importable at `github.com/praxis-go/praxis/mcp` with
+- [ ] `praxis/mcp` importable at `github.com/praxis-os/praxis/mcp` with
       its own `go.mod`, sharing neither a version line nor a dependency
       closure with the core module.
 - [ ] Minimal public API surface per **D110** frozen as
@@ -313,7 +313,7 @@ sub-module is additive and lives behind its own go-module boundary.
 
 **Documentation and examples:**
 - [ ] `praxis/mcp` has its own godoc landing page under
-      `pkg.go.dev/github.com/praxis-go/praxis/mcp`.
+      `pkg.go.dev/github.com/praxis-os/praxis/mcp`.
 - [ ] At least one runnable example under `examples/mcp/` loads a
       published MCP server over stdio and completes an end-to-end
       `Invoke` with an MCP-exposed tool call.
@@ -329,7 +329,7 @@ sub-module is additive and lives behind its own go-module boundary.
 
 ## 5. v0.9.0 — Skills Integration
 
-**Goal:** ship the `github.com/praxis-go/praxis/skills` sub-module as its
+**Goal:** ship the `github.com/praxis-os/praxis/skills` sub-module as its
 own independently-tagged release, implementing Phase 8 decisions
 D122–D135. As with v0.7.0, the core module's public surface is unchanged;
 the sub-module is additive.
@@ -358,7 +358,7 @@ the sub-module is additive.
 - [ ] Release-please configuration commit cites **D135** in its message.
 
 **Sub-module public API (D122, D124, D125):**
-- [ ] `praxis/skills` importable at `github.com/praxis-go/praxis/skills`
+- [ ] `praxis/skills` importable at `github.com/praxis-os/praxis/skills`
       with its own `go.mod`, independent from both the core module and
       `praxis/mcp`.
 - [ ] Loader surface per **D124**: `skills.Open(fsys fs.FS, root string)

@@ -686,8 +686,8 @@ Sources: `https://safedep.io/agent-skills-threat-model/`,
 
 **The working hypothesis.** praxis ships a first-class loader and
 typed `Skill` value as a separately-versioned sub-module at
-`github.com/praxis-go/praxis/skills`, mirroring Phase 7's
-`github.com/praxis-go/praxis/mcp`. Loading is build-time only from
+`github.com/praxis-os/praxis/skills`, mirroring Phase 7's
+`github.com/praxis-os/praxis/mcp`. Loading is build-time only from
 a caller-provided filesystem path. No registry talk, no download,
 no runtime discovery, no hot-reload.
 

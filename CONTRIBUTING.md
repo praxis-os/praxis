@@ -14,7 +14,7 @@ PR process.
 ## Local setup
 
 ```sh
-git clone https://github.com/praxis-go/praxis.git
+git clone https://github.com/praxis-os/praxis.git
 cd praxis
 go mod download
 make check

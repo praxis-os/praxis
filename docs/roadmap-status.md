@@ -66,7 +66,7 @@ Per-phase allocation:
   module path rules, release-please pipeline, CI pipeline (lint,
   test, coverage, benchmarks, banned-identifier grep, govulncheck,
   codeql), contribution model, RFC process, code of conduct.
-- **Phase 7** — `github.com/praxis-go/praxis/mcp` separately
+- **Phase 7** — `github.com/praxis-os/praxis/mcp` separately
   versioned sub-module. Transport priority (stdio + Streamable
   HTTP), tool namespacing (`{LogicalName}__{mcpToolName}`),
   credential flow for long-lived sessions, trust-boundary
@@ -74,7 +74,7 @@ Per-phase allocation:
   public API surface. Official `modelcontextprotocol/go-sdk` as
   reuse target (conditional on implementation-phase transitive-dep
   audit).
-- **Phase 8** — `github.com/praxis-go/praxis/skills` separately
+- **Phase 8** — `github.com/praxis-os/praxis/skills` separately
   versioned sub-module. Canonical `SKILL.md` shape anchored to
   agentskills.io spec intersection (`name`, `description` required;
   `license`, `compatibility`, `metadata`, `allowed-tools` optional).

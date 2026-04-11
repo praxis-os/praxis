@@ -1659,7 +1659,7 @@
 
 **Type:** Epic
 **Title:** v0.7.0 — MCP Integration
-**Description:** First release of the `praxis/mcp` sub-module at `github.com/praxis-go/praxis/mcp`. Implements Phase 7 (decisions D106–D121): stdio + Streamable HTTP transports via the official `modelcontextprotocol/go-sdk`, `{LogicalName}__{mcpTool}` tool namespacing, credential-per-session flow, trust-boundary hardening, bounded-cardinality MCP metrics, and the Phase 6 release-pipeline amendment that turns the manifest into a two-package (core + mcp) release train. Core module surface unchanged at v0.5.x.
+**Description:** First release of the `praxis/mcp` sub-module at `github.com/praxis-os/praxis/mcp`. Implements Phase 7 (decisions D106–D121): stdio + Streamable HTTP transports via the official `modelcontextprotocol/go-sdk`, `{LogicalName}__{mcpTool}` tool namespacing, credential-per-session flow, trust-boundary hardening, bounded-cardinality MCP metrics, and the Phase 6 release-pipeline amendment that turns the manifest into a two-package (core + mcp) release train. Core module surface unchanged at v0.5.x.
 **Priority:** Highest
 **Dependencies:** Epic 3 (v0.5.0)
 **Labels:** `milestone:v0.7.0`
@@ -1678,10 +1678,10 @@
 #### T29.1: Create `praxis/mcp/go.mod`
 
 **Type:** Task
-**Title:** Create `praxis/mcp/go.mod` with module path `github.com/praxis-go/praxis/mcp`
+**Title:** Create `praxis/mcp/go.mod` with module path `github.com/praxis-os/praxis/mcp`
 **Description:** Initialise the MCP sub-module as a standalone Go module. Minimum Go version: 1.23.
 **Acceptance criteria:**
-- `praxis/mcp/go.mod` exists with module path `github.com/praxis-go/praxis/mcp`
+- `praxis/mcp/go.mod` exists with module path `github.com/praxis-os/praxis/mcp`
 - `go build ./mcp/...` succeeds
 - Sub-module does not introduce circular imports with core
 **Decision refs:** D106
@@ -2401,7 +2401,7 @@
 
 **Type:** Epic
 **Title:** v0.9.0 — Skills Integration
-**Description:** First release of the `praxis/skills` sub-module at `github.com/praxis-go/praxis/skills`. Implements Phase 8 (decisions D122–D135): the `SKILL.md` bundle format loader (`skills.Open` / `skills.Load`), the `skills.WithSkill` orchestrator option, panic-on-duplicate-name collision, and the Phase 6 release-pipeline amendment that extends the manifest to a three-package form (core + mcp + skills). `praxis/skills` does NOT import `praxis/mcp`; callers compose both sub-modules explicitly.
+**Description:** First release of the `praxis/skills` sub-module at `github.com/praxis-os/praxis/skills`. Implements Phase 8 (decisions D122–D135): the `SKILL.md` bundle format loader (`skills.Open` / `skills.Load`), the `skills.WithSkill` orchestrator option, panic-on-duplicate-name collision, and the Phase 6 release-pipeline amendment that extends the manifest to a three-package form (core + mcp + skills). `praxis/skills` does NOT import `praxis/mcp`; callers compose both sub-modules explicitly.
 **Priority:** Highest
 **Dependencies:** Epic 4 (v0.7.0)
 **Labels:** `milestone:v0.9.0`
@@ -2420,9 +2420,9 @@
 #### T36.1: Create `praxis/skills/go.mod`
 
 **Type:** Task
-**Title:** Create `praxis/skills/go.mod` with module path `github.com/praxis-go/praxis/skills`
+**Title:** Create `praxis/skills/go.mod` with module path `github.com/praxis-os/praxis/skills`
 **Acceptance criteria:**
-- `praxis/skills/go.mod` exists with module path `github.com/praxis-go/praxis/skills`
+- `praxis/skills/go.mod` exists with module path `github.com/praxis-os/praxis/skills`
 - `go build ./skills/...` succeeds
 - `praxis/skills` does NOT import `praxis/mcp` (verified by import-graph check)
 **Decision refs:** D122, D131

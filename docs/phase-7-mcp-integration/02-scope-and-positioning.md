@@ -16,14 +16,14 @@ in the praxis monorepo.
 
 Concretely:
 
-- The core module `github.com/praxis-go/praxis` ships **no** MCP code
+- The core module `github.com/praxis-os/praxis` ships **no** MCP code
   and **no** MCP dependency. Zero-MCP consumers pay zero transitive
   dependency cost.
-- A second Go module, `github.com/praxis-go/praxis/mcp`, lives in the
+- A second Go module, `github.com/praxis-os/praxis/mcp`, lives in the
   same repository under a `mcp/` directory with its own `go.mod`. It
   implements `praxis/tools.Invoker` on top of the official MCP Go SDK
   and is consumed by users who opt in with
-  `go get github.com/praxis-go/praxis/mcp`.
+  `go get github.com/praxis-os/praxis/mcp`.
 - The MCP module depends on `praxis/tools`, `praxis/credentials`,
   `praxis/errors`, and `praxis/telemetry` — the existing frozen
   interfaces. It does **not** depend on `praxis/orchestrator` or on

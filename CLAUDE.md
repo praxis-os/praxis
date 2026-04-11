@@ -9,7 +9,7 @@ budget enforcement, typed error taxonomy, OpenTelemetry observability, and optio
 agent identity signing.
 
 **License:** Apache 2.0
-**Module:** `github.com/praxis-go/praxis` (to be confirmed at first public commit)
+**Module:** `github.com/praxis-os/praxis`
 **Minimum Go version:** 1.23+
 **Target:** `v1.0.0` — stable public Go API that enterprise teams reach for when
 "call an LLM in a loop" is not enough.

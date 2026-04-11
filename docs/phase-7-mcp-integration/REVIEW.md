@@ -4,7 +4,7 @@
 
 Phase 7 delivers a well-bounded first-class MCP integration for praxis,
 shipped as a separately-versioned sub-module at
-`github.com/praxis-go/praxis/mcp`. Sixteen decisions (D106–D121) cover
+`github.com/praxis-os/praxis/mcp`. Sixteen decisions (D106–D121) cover
 positioning, public API, namespacing, budget participation, error
 translation, content flattening, observability, credential flow, trust
 boundary, stdio hardening, non-goals, and the required Phase 6
