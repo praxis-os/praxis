@@ -20,6 +20,26 @@
       "extra-files": [
         "internal/version/version.go"
       ]
+    },
+    "mcp": {
+      "release-type": "go",
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": false,
+      "always-update": true,
+      "changelog-sections": [
+        {"type": "feat", "section": "Added"},
+        {"type": "fix", "section": "Fixed"},
+        {"type": "docs", "section": "Documentation"},
+        {"type": "perf", "section": "Performance"},
+        {"type": "refactor", "section": "Changed"},
+        {"type": "test", "section": "Testing"},
+        {"type": "chore", "section": "Maintenance", "hidden": true},
+        {"type": "ci", "section": "CI", "hidden": true},
+        {"type": "build", "section": "Build", "hidden": true}
+      ],
+      "extra-files": [
+        "mcp/internal/version/version.go"
+      ]
     }
   }
 }
