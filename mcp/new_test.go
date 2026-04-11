@@ -17,6 +17,13 @@ import (
 // LogicalName. The transport is always a stdio variant with a
 // trivial command, so the only distinguishing field across test
 // cases is the name itself.
+//
+// Tests that want validation-only behaviour (construction shape,
+// rollback, option binding) pair validServer with
+// [withSessionOpener] and [nullSessionOpener] to bypass the
+// real SDK-backed session-opening path — the default New flow
+// would otherwise fail at [exec.LookPath] on the synthetic
+// command name used here.
 func validServer(name string) Server {
 	return Server{
 		LogicalName: name,
@@ -54,11 +61,13 @@ func assertSystemError(t *testing.T, err error, wantFragments ...string) {
 
 // TestNewHappyPath asserts that valid inputs produce a non-nil
 // Invoker, that the returned value satisfies the public Invoker
-// interface shape, and that Close is idempotent on it.
+// interface shape, and that Close is idempotent on it. Uses
+// nullSessionOpener to bypass the real SDK session-opening path
+// — this test is about construction shape, not session lifecycle.
 func TestNewHappyPath(t *testing.T) {
 	t.Parallel()
 
-	inv, err := New(context.Background(), []Server{validServer("probe")})
+	inv, err := New(context.Background(), []Server{validServer("probe")}, withSessionOpener(nullSessionOpener))
 	if err != nil {
 		t.Fatalf("New returned unexpected error: %v", err)
 	}
@@ -77,15 +86,17 @@ func TestNewHappyPath(t *testing.T) {
 	}
 }
 
-// TestNewStubInvoke documents the S30 stub contract: the returned
-// Invoker's Invoke method reports a typed SystemError in
-// ToolResult.Err while returning a nil framework error. S31+
-// replaces the stub body; tests that depend on the stub output are
-// expected to migrate then.
+// TestNewStubInvoke documents the S31 PR-B stub contract: the
+// returned Invoker's Invoke method reports a typed SystemError in
+// ToolResult.Err with the "routing not yet wired" sentinel, while
+// returning a nil framework error. Uses nullSessionOpener so the
+// test does not depend on any real session being open — the
+// Invoke stub in S31 PR-B short-circuits before touching sessions.
+// S32 will replace the stub body and migrate this test.
 func TestNewStubInvoke(t *testing.T) {
 	t.Parallel()
 
-	inv, err := New(context.Background(), []Server{validServer("probe")})
+	inv, err := New(context.Background(), []Server{validServer("probe")}, withSessionOpener(nullSessionOpener))
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -107,17 +118,19 @@ func TestNewStubInvoke(t *testing.T) {
 	if result.Err == nil {
 		t.Fatal("Invoke ToolResult.Err is nil; stub must route failures via ToolResult.Err")
 	}
-	assertSystemError(t, result.Err, "adapter runtime not yet implemented")
+	assertSystemError(t, result.Err, "routing is not yet wired")
 }
 
 // TestNewServerListPinned asserts T30.4's "server list is pinned for
 // the lifetime of the Invoker" requirement. Mutating the caller's
-// slice after New returns must not affect the Invoker.
+// slice after New returns must not affect the Invoker. Uses
+// nullSessionOpener — this test is about slice-pinning, not
+// session lifecycle.
 func TestNewServerListPinned(t *testing.T) {
 	t.Parallel()
 
 	servers := []Server{validServer("probe")}
-	inv, err := New(context.Background(), servers)
+	inv, err := New(context.Background(), servers, withSessionOpener(nullSessionOpener))
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -232,7 +245,9 @@ func TestNewServerListValidation(t *testing.T) {
 
 // TestNewServerCap asserts that the MaxServers cap is enforced at
 // exactly the boundary: 32 servers is accepted, 33 is rejected with
-// a typed error referencing the cap.
+// a typed error referencing the cap. Uses nullSessionOpener so the
+// happy-path branch does not try to open 32 real sessions — this
+// test is about boundary enforcement, not session lifecycle.
 func TestNewServerCap(t *testing.T) {
 	t.Parallel()
 
@@ -241,7 +256,7 @@ func TestNewServerCap(t *testing.T) {
 	for i := range boundary {
 		boundary[i] = validServer(fmt.Sprintf("server-%d", i))
 	}
-	inv, err := New(context.Background(), boundary)
+	inv, err := New(context.Background(), boundary, withSessionOpener(nullSessionOpener))
 	if err != nil {
 		t.Errorf("New with %d servers (at cap): unexpected error: %v", MaxServers, err)
 	}
@@ -249,12 +264,13 @@ func TestNewServerCap(t *testing.T) {
 		_ = inv.Close()
 	}
 
-	// Over-cap: MaxServers + 1 — must fail with a typed error.
+	// Over-cap: MaxServers + 1 — must fail with a typed error
+	// before the opener is ever consulted (validation runs first).
 	overCap := make([]Server, MaxServers+1)
 	for i := range overCap {
 		overCap[i] = validServer(fmt.Sprintf("server-%d", i))
 	}
-	inv2, err2 := New(context.Background(), overCap)
+	inv2, err2 := New(context.Background(), overCap, withSessionOpener(nullSessionOpener))
 	if inv2 != nil {
 		t.Errorf("expected nil Invoker on over-cap, got %T", inv2)
 	}
@@ -265,11 +281,19 @@ func TestNewServerCap(t *testing.T) {
 // TestNewOptionNilIsIgnored asserts that a nil Option in the
 // variadic list is silently ignored rather than panicking. This
 // matches the default-safe posture of the With* constructors
-// themselves (see options_test.go).
+// themselves (see options_test.go). Uses nullSessionOpener so the
+// test does not depend on a real session-opening path.
 func TestNewOptionNilIsIgnored(t *testing.T) {
 	t.Parallel()
 
-	inv, err := New(context.Background(), []Server{validServer("probe")}, nil, WithMaxResponseBytes(1024), nil)
+	inv, err := New(
+		context.Background(),
+		[]Server{validServer("probe")},
+		nil,
+		WithMaxResponseBytes(1024),
+		nil,
+		withSessionOpener(nullSessionOpener),
+	)
 	if err != nil {
 		t.Fatalf("New: unexpected error with nil options: %v", err)
 	}
