@@ -76,6 +76,43 @@ Allowed types: `feat`, `fix`, `docs`, `test`, `refactor`, `chore`, `perf`, `ci`,
 Scope is optional. When provided, it should be the package name, for example:
 `budget`, `orchestrator`, `llm/anthropic`.
 
+### Sub-module commit scopes (release-please routing)
+
+praxis is a monorepo shipping multiple independently-versioned Go
+modules. Conventional-commit scopes control which module's release
+train a commit feeds into. release-please reads the scope to decide
+whether to bump the core `.` package or a sub-module package entry.
+
+Recognised sub-module scopes:
+
+- `feat(mcp): ...` / `fix(mcp): ...` — route to the `praxis/mcp`
+  sub-module (`github.com/praxis-os/praxis/mcp`). Tagged as
+  `mcp/vX.Y.Z`.
+
+Commits without a scope, or with a scope that matches a core package
+name (e.g. `feat(budget):`, `fix(orchestrator):`, `docs:`), route to
+the core module (`.` package) and the main `vX.Y.Z` tag train.
+
+Examples:
+
+```
+feat(mcp): add stdio transport with process isolation
+fix(mcp): correct tool-name collision error message
+build(mcp): extend release-please to two-package form
+feat(budget): add per-token cost accumulator          # routes to core
+chore: bump golangci-lint to v1.59                     # routes to core
+```
+
+A commit that touches both core and a sub-module should be split into
+two commits with the correct scope on each — mixed commits make the
+release train ambiguous. When in doubt, keep `mcp/` changes on their
+own commit.
+
+This convention is recorded against **D121** (Phase 7 release-pipeline
+amendment obligation). The `commitsar` configuration accepts the
+sub-module scope without modification because it uses a free-form
+scope field.
+
 Breaking changes must be signalled with a `BREAKING CHANGE:` footer — not with a
 `!` suffix:
 
