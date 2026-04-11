@@ -2,10 +2,11 @@
 name: plan-phase
 description: >
   Turn a praxis design phase into a structured planning artifact. Use when starting or
-  refining any of the 6 planning phases (API Scope and Positioning, Core Runtime,
+  refining any of the 8 planning phases (API Scope and Positioning, Core Runtime,
   Interface Contracts, Observability and Errors, Security and Trust, Release and
-  Community Governance). Produces objectives, key questions, decisions, assumptions,
-  risks, deliverables, recommended subagents, and exit criteria.
+  Community Governance, MCP Integration, Skills Integration). Produces objectives,
+  key questions, decisions, assumptions, risks, deliverables, recommended subagents,
+  and exit criteria.
 ---
 
 # Plan Phase

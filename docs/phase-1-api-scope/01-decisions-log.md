@@ -390,12 +390,12 @@ address this decision explicitly.
 ## D10 — Project name and module path
 
 **Status:** decided (conditional, pending pre-v0.1.0 verification)
-**Summary:** Project name `praxis`, module path `github.com/praxis-go/praxis`.
+**Summary:** Project name `praxis`, module path `github.com/praxis-os/praxis`.
 Conditional on pre-v0.1.0 brand/trademark review vs `usepraxis.app` and on
 acquiring or confirming the currently empty `praxis-go` GitHub org.
 
 **Decision.** The project ships under the name `praxis` with module path
-`github.com/praxis-go/praxis`, subject to two preconditions that must be
+`github.com/praxis-os/praxis`, subject to two preconditions that must be
 satisfied before the first public commit (v0.1.0):
 
 1. **GitHub org.** The `github.com/praxis-go` organization exists but is
@@ -580,7 +580,7 @@ in a later phase if new evidence or downstream constraints justify it.
 | D07 | `requires_approval` returned-to-caller semantics | decided |
 | D08 | `PriceProvider` per-invocation snapshot | decided |
 | D09 | No plugins in v1 (re-confirmed) | decided |
-| D10 | Name `praxis` / module `github.com/praxis-go/praxis` | decided (conditional) |
+| D10 | Name `praxis` / module `github.com/praxis-os/praxis` | decided (conditional) |
 | D11 | Positioning gaps not closed | decided |
 | D12 | Zero-wiring smoke-test promise | decided |
 | D13 | Three-tier interface stability policy | decided |

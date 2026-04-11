@@ -156,7 +156,7 @@ In practice, deprecated symbols accumulate in v1.x and are removed in v2.0.0.
 
 When a breaking change is needed after v1.0:
 
-1. The module path changes to `github.com/praxis-go/praxis/v2`.
+1. The module path changes to `github.com/praxis-os/praxis/v2`.
 2. All import paths in the codebase update to include `/v2`.
 3. v1.x consumers are never auto-upgraded — `go get` respects module
    version suffixes.

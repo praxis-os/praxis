@@ -13,7 +13,7 @@ release checklist.
 
 - **`frozen-v1.0`** — The interface shape is frozen at v1.0 as a
   semver-level commitment to downstream consumers: any breaking change
-  requires a v2 module path (`github.com/praxis-go/praxis/v2`). Adding a
+  requires a v2 module path (`github.com/praxis-os/praxis/v2`). Adding a
   method is a breaking change and must be delivered as a new interface
   that embeds the original (e.g., `llm.ProviderV2 { llm.Provider;
   NewMethod(...) }`), shipped alongside. This is a technical contract with

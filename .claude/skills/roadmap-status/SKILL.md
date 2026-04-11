@@ -1,7 +1,7 @@
 ---
 name: roadmap-status
 description: >
-  Track planning progress across the 6 praxis design phases and produce a compact status
+  Track planning progress across the 8 praxis design phases and produce a compact status
   snapshot. Use after completing a phase step, after a review, or when checking overall
   planning readiness for v1.0. Shows current phase, completed work, open decisions,
   blockers, next step, and overall status.
@@ -33,6 +33,8 @@ Each phase stores artifacts in `docs/phase-<N>-<slug>/`:
 | 4 | Observability and Error Model | `docs/phase-4-observability-errors/` |
 | 5 | Security and Trust Boundaries | `docs/phase-5-security-trust/` |
 | 6 | Release, Versioning and Community Governance | `docs/phase-6-release-governance/` |
+| 7 | MCP Integration | `docs/phase-7-mcp-integration/` |
+| 8 | Skills Integration | `docs/phase-8-skills-integration/` |
 
 All phase output files use a two-digit numbered prefix (e.g., `01-`, `02-`) to enforce
 reading order. `REVIEW.md` is the only unnumbered file.
@@ -63,8 +65,15 @@ Phases (planning):
 4. Observability and Error Model
 5. Security and Trust Boundaries
 6. Release, Versioning and Community Governance
+7. MCP Integration
+8. Skills Integration
 
 Valid states: `not-started` | `in-progress` | `under-review` | `blocked` | `approved`
+
+Phases 7 and 8 were added after Phase 6 was approved, to close the
+v1.0.0 freeze on the MCP and provider-skills axes. Phase 8 depends on
+Phase 7 and must not transition past `in-progress` while Phase 7 is not
+`approved`.
 
 Phase 0 (Seed Context) is always `locked` once `docs/PRAXIS-SEED-CONTEXT.md` exists. It
 is not a working phase — it is the frozen baseline that all phases refine.
@@ -90,6 +99,8 @@ Use this exact structure:
 | 4 | Observability and Error Model | <status> | <count or —> |
 | 5 | Security and Trust Boundaries | <status> | <count or —> |
 | 6 | Release, Versioning and Community Governance | <status> | <count or —> |
+| 7 | MCP Integration | <status> | <count or —> |
+| 8 | Skills Integration | <status> | <count or —> |
 
 ## Locked Decisions
 Count of decisions locked across all phases. Reference the decision ID ranges per phase
@@ -128,7 +139,7 @@ the current phase and overall status.
 - Do not mark a phase as `approved` if core questions remain open or the decoupling
   contract check is failing.
 - Do not blur planning status with implementation status. Implementation begins only
-  after Phase 6 is approved.
+  after all 8 planning phases are approved.
 - Keep the snapshot compact and scannable.
 - Always scan the filesystem — never rely on memory or assumptions about what exists.
 - Cross-reference `docs/PRAXIS-SEED-CONTEXT.md` for the frozen baseline. If any phase

@@ -2,8 +2,10 @@
 
 **Project key:** PRAX
 **Board:** francescofioredev.atlassian.net
-**Source:** `docs/phase-6-release-governance/06-release-milestones.md` (exit criteria) + 103 adopted decisions (D01–D105) across 6 approved design phases.
-**Totals:** 4 Epics, 28 Stories, 92 Tasks
+**Source:** `docs/phase-6-release-governance/06-release-milestones.md` (exit criteria) + 135 adopted decisions (D01–D135) across 8 approved design phases.
+**Totals:** 6 Epics, 42 Stories, 205 Tasks
+
+> **Roadmap re-ordering (2026-04-10):** Phases 7 (MCP Integration) and 8 (Skills Integration) were added as v1.0.0 blockers after Phase 6 was approved. Execution order is `5 → 7 → 8 → 6`, i.e. the `praxis/mcp` sub-module (v0.7.0) ships first, then the `praxis/skills` sub-module (v0.9.0), and only after a production consumer has shipped on a `v0.9.x` tag does the core module freeze at `v1.0.0`. The v1.0.0 production-consumer gate (D91) was re-anchored from `v0.5.x` to `v0.9.x` on the same date.
 
 ---
 
@@ -1653,14 +1655,1318 @@
 
 ---
 
-## Epic 4: PRAX — v1.0.0 API Freeze
+## Epic 4: PRAX — v0.7.0 MCP Integration
+
+**Type:** Epic
+**Title:** v0.7.0 — MCP Integration
+**Description:** First release of the `praxis/mcp` sub-module at `github.com/praxis-os/praxis/mcp`. Implements Phase 7 (decisions D106–D121): stdio + Streamable HTTP transports via the official `modelcontextprotocol/go-sdk`, `{LogicalName}__{mcpTool}` tool namespacing, credential-per-session flow, trust-boundary hardening, bounded-cardinality MCP metrics, and the Phase 6 release-pipeline amendment that turns the manifest into a two-package (core + mcp) release train. Core module surface unchanged at v0.5.x.
+**Priority:** Highest
+**Dependencies:** Epic 3 (v0.5.0)
+**Labels:** `milestone:v0.7.0`
+
+---
+
+### S29: praxis/mcp sub-module & release pipeline scaffolding
+
+**Type:** Story
+**Title:** Scaffold `praxis/mcp` Go sub-module and extend release-please to a two-package manifest
+**Description:** Create the independently-versioned `praxis/mcp` Go module directory with its own `go.mod` and internal version file, then extend the Phase 6 release-please configuration from the single-package form to a two-package form (core + mcp). First concrete task on the v0.7.0 critical path.
+**Priority:** Highest
+**Dependencies:** Epic 3 (v0.5.0)
+**Labels:** `milestone:v0.7.0`, `area:build`, `area:mcp`
+
+#### T29.1: Create `praxis/mcp/go.mod`
+
+**Type:** Task
+**Title:** Create `praxis/mcp/go.mod` with module path `github.com/praxis-os/praxis/mcp`
+**Description:** Initialise the MCP sub-module as a standalone Go module. Minimum Go version: 1.23.
+**Acceptance criteria:**
+- `praxis/mcp/go.mod` exists with module path `github.com/praxis-os/praxis/mcp`
+- `go build ./mcp/...` succeeds
+- Sub-module does not introduce circular imports with core
+**Decision refs:** D106
+**Priority:** Highest
+**Labels:** `milestone:v0.7.0`, `area:build`, `area:mcp`
+
+#### T29.2: Add `mcp/internal/version/version.go`
+
+**Type:** Task
+**Title:** Add `mcp/internal/version/version.go` tracked by release-please
+**Description:** Create the version file release-please will bump for MCP releases. Initial value `0.0.0`, will be set to `0.7.0` at first tag cut.
+**Acceptance criteria:**
+- File exists with a `const Version = "..."` constant
+- File path matches the `extra-files` entry in the release-please config
+**Decision refs:** D121
+**Priority:** High
+**Dependencies:** T29.1
+**Labels:** `milestone:v0.7.0`, `area:build`, `area:mcp`
+
+#### T29.3: Extend release-please config with `mcp` package
+
+**Type:** Task
+**Title:** Extend `.github/release-please-config.json` with the `mcp` package entry
+**Description:** Move from the single-package manifest to a two-package form. Both entries use `release-type: go`, matching the core module structure.
+**Acceptance criteria:**
+- Config contains a `.` entry (core) and an `mcp` entry
+- `mcp` entry has `release-type: go`, changelog sections mapped to keep-a-changelog
+- `extra-files` points to `mcp/internal/version/version.go`
+**Decision refs:** D121
+**Priority:** Highest
+**Dependencies:** T29.2
+**Labels:** `milestone:v0.7.0`, `area:build`, `area:mcp`
+
+#### T29.4: Extend release-please manifest with `mcp` key
+
+**Type:** Task
+**Title:** Extend `.github/release-please-manifest.json` with the `mcp` key
+**Description:** Add the `mcp` entry to the manifest so release-please tracks the sub-module version independently.
+**Acceptance criteria:**
+- Manifest contains both `.` and `mcp` entries
+- Initial `mcp` version: `0.0.0` (will be bumped by the first `feat(mcp):` commit)
+**Decision refs:** D121
+**Priority:** Highest
+**Dependencies:** T29.3
+**Labels:** `milestone:v0.7.0`, `area:build`, `area:mcp`
+
+#### T29.5: Document `feat(mcp):` / `fix(mcp):` scope routing
+
+**Type:** Task
+**Title:** Document `feat(mcp):` and `fix(mcp):` commit-scope convention in CONTRIBUTING.md
+**Description:** Commits scoped `(mcp)` route to the mcp sub-module release line; unscoped or `(core)` commits route to the core release line. Aligns with the Phase 7 decoupling contract.
+**Acceptance criteria:**
+- CONTRIBUTING.md has a "Commit scopes" section listing `core`, `mcp`
+- Example commits illustrated
+**Decision refs:** D121
+**Priority:** Medium
+**Dependencies:** T29.4
+**Labels:** `milestone:v0.7.0`, `area:docs`, `area:build`
+
+#### T29.6: Dry-run release-please verification
+
+**Type:** Task
+**Title:** Dry-run release-please in two-package mode before first `mcp/v0.7.0` tag
+**Description:** Run release-please with `--dry-run` on a feature branch to confirm the manifest produces the expected `mcp/v0.7.0` tag and a separate core release train. Gate the first real tag on a green dry run.
+**Acceptance criteria:**
+- Dry-run output shows two independently-versioned release PRs
+- No regressions on the core release line
+- Tag format `mcp/v0.7.0` validated
+**Decision refs:** D121
+**Priority:** High
+**Dependencies:** T29.5
+**Labels:** `milestone:v0.7.0`, `area:ci`, `area:build`
+
+---
+
+### S30: MCP public API surface
+
+**Type:** Story
+**Title:** Define the minimal `praxis/mcp` public API surface (Server, Transport, Invoker, New, Options)
+**Description:** Lock the exported surface of the sub-module to the smallest shape that satisfies Phase 7's integration model: a `Server` value type, a sealed `Transport` interface with two concrete variants, an `Invoker` that embeds `tools.Invoker` + `io.Closer`, a `New` constructor with a ≤32-server cap, and four functional options. No runtime plugin loading, no dynamic discovery.
+**Priority:** Highest
+**Dependencies:** S29
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:api`
+
+#### T30.1: Define `mcp.Server` struct
+
+**Type:** Task
+**Title:** Define `mcp.Server` value type with LogicalName, CredentialRef, Transport, CredentialEnv
+**Acceptance criteria:**
+- Exported fields documented with godoc
+- `CredentialEnv` applies to stdio only (documented)
+- Zero-value struct is rejected by validator
+**Decision refs:** D110, D111
+**Priority:** Highest
+**Dependencies:** T29.1
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:api`
+
+#### T30.2: Define sealed `Transport` interface + `TransportStdio`, `TransportHTTP`
+
+**Type:** Task
+**Title:** Define sealed `Transport` interface with `TransportStdio` and `TransportHTTP` concrete variants
+**Description:** The interface is sealed via an unexported marker method so callers cannot supply their own transport implementations in v1.0.0.
+**Acceptance criteria:**
+- `Transport` is an interface with an unexported `isMCPTransport()` marker
+- `TransportStdio` and `TransportHTTP` are the only two implementations
+- Godoc documents the sealed-interface rationale
+**Decision refs:** D108, D110
+**Priority:** Highest
+**Dependencies:** T30.1
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:api`
+
+#### T30.3: Define `Invoker` type
+
+**Type:** Task
+**Title:** Define `mcp.Invoker` type embedding `tools.Invoker` and `io.Closer`
+**Description:** The adapter returned by `New` implements both interfaces so it plugs into the orchestrator's tool chain and can release resources on shutdown.
+**Acceptance criteria:**
+- `Invoker` satisfies `tools.Invoker`
+- `Invoker` satisfies `io.Closer`
+- Close releases all open sessions
+**Decision refs:** D110
+**Priority:** Highest
+**Dependencies:** T30.2
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:api`
+
+#### T30.4: `New(servers []Server, opts ...Option)` with ≤32 server cap
+
+**Type:** Task
+**Title:** Implement `New` constructor enforcing the ≤ 32-server cap at construction time
+**Acceptance criteria:**
+- `New` returns a typed error if `len(servers) > 32`
+- `New` returns a typed error on empty server list
+- Server list is pinned for the lifetime of the Invoker (no runtime registration)
+**Decision refs:** D110, D115
+**Priority:** Highest
+**Dependencies:** T30.3
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:api`
+
+#### T30.5: Functional options
+
+**Type:** Task
+**Title:** Implement `WithResolver`, `WithMetricsRecorder`, `WithTracerProvider`, `WithMaxResponseBytes`
+**Acceptance criteria:**
+- Four functional options implemented and godoc-ed
+- Options are composable and idempotent
+- Defaults: nil resolver (stdio-only scenarios), nil recorder (no metrics), `otel.GetTracerProvider()`, 16 MiB max response
+**Decision refs:** D112, D115
+**Priority:** High
+**Dependencies:** T30.4
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:api`
+
+#### T30.6: `LogicalName` validation
+
+**Type:** Task
+**Title:** Enforce `LogicalName` validation at `New` time
+**Description:** Non-empty, unique across the server list, must not contain the `__` substring (reserved for tool namespacing).
+**Acceptance criteria:**
+- Empty LogicalName rejected
+- Duplicate LogicalNames rejected
+- LogicalName containing `__` rejected
+- All errors are typed (TypedError contract)
+**Decision refs:** D111
+**Priority:** Highest
+**Dependencies:** T30.4
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:errors`
+
+#### T30.7: Package `doc.go` with PostToolFilter empty-content contract
+
+**Type:** Task
+**Title:** Write package `doc.go` including the PostToolFilter empty-content contract note
+**Description:** Document the adapter contract for `PostToolFilter` implementors: an MCP tool call may return `ToolStatusSuccess` with `Content == ""` when the server produced no text-type content blocks. Filters must treat this as a valid successful outcome.
+**Acceptance criteria:**
+- `mcp/doc.go` present with package-level godoc
+- Empty-content contract explicitly documented
+**Decision refs:** D114
+**Priority:** High
+**Dependencies:** T30.1
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:docs`
+
+#### T30.8: Document the 10 binding non-goals
+
+**Type:** Task
+**Title:** Document the 10 binding Phase 7 non-goals in the package godoc
+**Description:** Enumerate: no runtime discovery, no praxis-as-MCP-server, no dynamic tool registration, no multi-modal content, no bundled servers, no credential refresh, no custom http.Client, no SignedIdentity forwarding, no adapter-level policy hook, no runtime SDK version switching. Restates D120.
+**Acceptance criteria:**
+- All 10 non-goals listed verbatim in godoc
+- Each non-goal annotated with the decision that adopted it
+**Decision refs:** D109, D120
+**Priority:** Medium
+**Dependencies:** T30.7
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:docs`
+
+---
+
+### S31: Transport implementations (stdio + Streamable HTTP)
+
+**Type:** Story
+**Title:** Implement stdio and Streamable HTTP transports on top of `modelcontextprotocol/go-sdk` v1.x
+**Description:** Ship the two transports committed at v1.0.0 with the hardening requirements from Phase 5: absolute command resolution, owned zeroed credential buffers, process-group isolation on Unix, bounded file descriptors, EPIPE handling, and a bearer-token pattern for HTTP.
+**Priority:** Highest
+**Dependencies:** S30
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:security`
+
+#### T31.1: Integrate `modelcontextprotocol/go-sdk` v1.x
+
+**Type:** Task
+**Title:** Add `github.com/modelcontextprotocol/go-sdk` v1.x as the sole MCP SDK dependency
+**Acceptance criteria:**
+- Dependency pinned to the v1.x line
+- SDK used only for MCP protocol wire format; all praxis-side types live in `praxis/mcp`
+- No fork or vendored copy
+**Decision refs:** D107
+**Priority:** Highest
+**Dependencies:** T29.1
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:build`
+
+#### T31.2: stdio transport — absolute command resolution at `New` time
+
+**Type:** Task
+**Title:** Resolve stdio commands to absolute paths at `New` time, not per call
+**Description:** The command argument to `TransportStdio` is resolved via `exec.LookPath` (or equivalent) and stored as an absolute path. Relative commands or PATH-dependent lookups at invocation time are rejected.
+**Acceptance criteria:**
+- Relative command rejected with typed error
+- `exec.LookPath` invoked once at `New` time
+- PATH changes between `New` and `Invoke` do not affect resolution
+**Decision refs:** D119
+**Priority:** Highest
+**Dependencies:** T31.1, T30.4
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:security`
+
+#### T31.3: stdio transport — zeroed credential buffer
+
+**Type:** Task
+**Title:** Deliver stdio credentials via a praxis-owned, zeroed buffer
+**Description:** The adapter fetches the credential via Resolver, copies it into a buffer it owns, passes that buffer to the stdio environment, then zeroes it when the session is established. The SDK-owned copy is not zeroed by praxis and is documented as a known residual risk (OI-MCP-1).
+**Acceptance criteria:**
+- Credential buffer lifecycle is owned by the adapter, not the SDK
+- `ZeroBytes` is invoked on the owned buffer after session establishment
+- Residual risk documented in package godoc
+**Decision refs:** D117, D119
+**Priority:** Highest
+**Dependencies:** T31.2
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:security`, `area:credentials`
+
+#### T31.4: stdio transport — process isolation & EPIPE handling
+
+**Type:** Task
+**Title:** Apply process-group isolation (`setpgid` on Unix), pipes-only stdio, and EPIPE/SIGPIPE handling
+**Acceptance criteria:**
+- Unix: child process runs in its own process group (`SysProcAttr.Setpgid = true`)
+- No extra file descriptors leak into the child
+- Write failures on closed pipes map to `ToolSubKindNetwork`
+- SIGPIPE does not terminate praxis
+**Decision refs:** D119
+**Priority:** High
+**Dependencies:** T31.3
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:security`
+
+#### T31.5: Streamable HTTP transport
+
+**Type:** Task
+**Title:** Implement Streamable HTTP transport with bearer-token header injection
+**Description:** Uses the SDK's default `http.Client` (no custom client in v1.0.0 per D120). Bearer token is injected into the `Authorization` header from the Resolver result.
+**Acceptance criteria:**
+- HTTP transport produces correct Streamable HTTP frames via SDK
+- Bearer header populated from Resolver
+- TLS handshake failures map to `ToolSubKindNetwork`
+**Decision refs:** D108, D117
+**Priority:** Highest
+**Dependencies:** T31.1, T30.4
+**Labels:** `milestone:v0.7.0`, `area:mcp`
+
+#### T31.6: Internal fake transport for tests
+
+**Type:** Task
+**Title:** Add `mcp/internal/transport/fake/` — in-memory test double
+**Description:** A fake transport that replays scripted MCP responses, used by adapter unit tests to achieve coverage without live processes or HTTP servers.
+**Acceptance criteria:**
+- Fake transport implements the sealed `Transport` interface
+- Supports scripted success, scripted error, and connection-drop scenarios
+- Used by at least 10 adapter unit tests
+**Decision refs:** D110
+**Priority:** High
+**Dependencies:** T30.2
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:testing`
+
+---
+
+### S32: Tool adapter, namespacing & session lifecycle
+
+**Type:** Story
+**Title:** Wire the MCP adapter into `tools.Invoker` with deterministic namespacing and per-server session reuse
+**Description:** The adapter fronts 1+ MCP servers as a single `tools.Invoker`. Tool names are composed as `{LogicalName}__{mcpToolName}`; duplicate composed names across servers panic at `New` time to prevent silent dispatch. Credentials are fetched once per session and the session is reused across calls.
+**Priority:** Highest
+**Dependencies:** S31
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:tools`
+
+#### T32.1: Tool name composition `{LogicalName}__{mcpToolName}`
+
+**Type:** Task
+**Title:** Compose exposed tool names as `{LogicalName}__{mcpToolName}` with `__` delimiter
+**Acceptance criteria:**
+- `Invoker.Tools()` returns names in the composed form
+- Delimiter is a literal `__` (documented as reserved)
+- Composition deterministic across runs
+**Decision refs:** D111
+**Priority:** Highest
+**Dependencies:** T30.6, T31.6
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:tools`
+
+#### T32.2: Collision detection — panic at `New` time
+
+**Type:** Task
+**Title:** Detect colliding composed tool names across servers and panic at `New` time
+**Description:** If two configured servers produce the same composed name, construction panics with a diagnostic message naming both servers and the conflicting tool. No silent dispatch.
+**Acceptance criteria:**
+- Collision detected for LogicalName+toolName duplicates
+- Panic message names both servers and the tool
+- Unit test asserts the panic path
+**Decision refs:** D111
+**Priority:** Highest
+**Dependencies:** T32.1
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:tools`
+
+#### T32.3: Credential fetch on first Invoke
+
+**Type:** Task
+**Title:** Fetch credentials on first `Invoke` via Resolver and close the credential immediately after session establishment
+**Description:** Implements D117. The credential's `Close()` is called as soon as the session handshake completes; subsequent calls reuse the open session without re-fetching.
+**Acceptance criteria:**
+- Resolver invoked at most once per server per `Invoker` lifetime
+- Credential closed after session establishment
+- Subsequent calls reuse the session (no Resolver invocation)
+**Decision refs:** D117
+**Priority:** Highest
+**Dependencies:** T31.3, T32.1
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:credentials`
+
+#### T32.4: Per-server session pooling
+
+**Type:** Task
+**Title:** Implement per-server long-lived session pooling
+**Acceptance criteria:**
+- One active session per configured server
+- Session reused across concurrent `Invoke` calls where the SDK supports concurrency
+- Serialised otherwise, documented
+**Decision refs:** D117
+**Priority:** High
+**Dependencies:** T32.3
+**Labels:** `milestone:v0.7.0`, `area:mcp`
+
+#### T32.5: `Invoker.Close()` drains and closes sessions
+
+**Type:** Task
+**Title:** `Invoker.Close()` drains in-flight calls and closes all open sessions
+**Acceptance criteria:**
+- `Close` is idempotent
+- In-flight calls complete or return a typed `ToolSubKindCancelled`
+- All underlying transports released
+**Decision refs:** D117
+**Priority:** High
+**Dependencies:** T32.4
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:cancellation`
+
+#### T32.6: Unit tests — namespacing & collision
+
+**Type:** Task
+**Title:** Unit tests for silent-dispatch prevention and collision panic path
+**Acceptance criteria:**
+- Positive test: distinct LogicalNames produce distinct composed names
+- Negative test: colliding composed names produce a panic with the diagnostic message
+- Uses the fake transport from T31.6
+**Decision refs:** D111
+**Priority:** High
+**Dependencies:** T32.2, T31.6
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:testing`
+
+---
+
+### S33: Content flattening & error translation
+
+**Type:** Story
+**Title:** Flatten MCP content blocks and translate MCP errors into the praxis error taxonomy
+**Description:** MCP tool results are flattened to text-only, newline-joined output at the adapter boundary; non-text blocks are discarded. Protocol, transport, handshake and size-overrun errors map to `ErrorKindTool` with the appropriate `ToolSubKind`, without introducing any new `ErrorKind` value.
+**Priority:** Highest
+**Dependencies:** S32
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:errors`
+
+#### T33.1: Content flattening — text-only, newline-joined
+
+**Type:** Task
+**Title:** Flatten MCP content arrays to text-only newline-joined output at the adapter boundary
+**Acceptance criteria:**
+- Only `text` content blocks contribute to output
+- Multiple text blocks are joined with `\n`
+- Order preserved as received from the server
+**Decision refs:** D114
+**Priority:** Highest
+**Dependencies:** T32.1
+**Labels:** `milestone:v0.7.0`, `area:mcp`
+
+#### T33.2: Non-text content discarded
+
+**Type:** Task
+**Title:** Discard non-text MCP content blocks (image, audio, resource) at the adapter boundary
+**Acceptance criteria:**
+- Image blocks dropped
+- Audio blocks dropped
+- Resource blocks dropped
+- Drop behaviour documented in adapter godoc
+**Decision refs:** D114, D120
+**Priority:** High
+**Dependencies:** T33.1
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:docs`
+
+#### T33.3: Empty-content edge case
+
+**Type:** Task
+**Title:** Support `ToolStatusSuccess` with `Content == ""` as the valid text-free outcome
+**Description:** Some MCP tools return only non-text blocks. The adapter must produce a successful ToolResult with empty Content rather than flag the call as an error.
+**Acceptance criteria:**
+- `Status == ToolStatusSuccess`, `Content == ""` accepted as normal
+- PostToolFilter contract note (from S30 T30.7) tested
+**Decision refs:** D114
+**Priority:** High
+**Dependencies:** T33.2, T30.7
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:errors`
+
+#### T33.4: Tool / JSON-RPC protocol errors → `ToolSubKindServerError`
+
+**Type:** Task
+**Title:** Map tool-level errors and JSON-RPC protocol/server errors to `ErrorKindTool` + `ToolSubKindServerError`
+**Acceptance criteria:**
+- MCP tool errors classified as `ServerError`
+- JSON-RPC `-32603` (internal error) classified as `ServerError`
+- Error carries the server LogicalName as an attribute
+**Decision refs:** D113
+**Priority:** Highest
+**Dependencies:** T33.1
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:errors`
+
+#### T33.5: Transport / handshake / TLS / 429 → `ToolSubKindNetwork`
+
+**Type:** Task
+**Title:** Map transport disconnect, handshake timeout, TLS failure, and HTTP 429 to `ToolSubKindNetwork`
+**Acceptance criteria:**
+- Four error categories mapped
+- 429 rate-limit classified as `Network` (retryable)
+- Handshake timeouts include the configured timeout in the error attributes
+**Decision refs:** D113
+**Priority:** Highest
+**Dependencies:** T33.4
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:errors`
+
+#### T33.6: 401/403 on established session → `ToolSubKindCircuitOpen`
+
+**Type:** Task
+**Title:** Map 401/403 on an already-established session to `ToolSubKindCircuitOpen`
+**Description:** Auth failures mid-session indicate that retrying with the same credential will not succeed; `CircuitOpen` signals "stop retrying" to the orchestrator.
+**Acceptance criteria:**
+- 401/403 mid-session classified as `CircuitOpen`
+- 401/403 during handshake classified as `ServerError` (initial auth failure)
+**Decision refs:** D113
+**Priority:** High
+**Dependencies:** T33.5
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:errors`
+
+#### T33.7: Response-size overrun → `ToolSubKindServerError`
+
+**Type:** Task
+**Title:** Enforce `MaxResponseBytes` guard and map overruns to `ToolSubKindServerError`
+**Acceptance criteria:**
+- Responses exceeding `MaxResponseBytes` (default 16 MiB) are cut off
+- Overrun error carries the actual vs. configured limit
+**Decision refs:** D112, D113
+**Priority:** High
+**Dependencies:** T33.4
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:budget`
+
+#### T33.8: Schema violations → `ToolSubKindSchemaViolation`
+
+**Type:** Task
+**Title:** Map MCP schema violations to `ToolSubKindSchemaViolation`
+**Acceptance criteria:**
+- Invalid tool-result shapes classified as `SchemaViolation`
+- Error attributes include the offending field path
+**Decision refs:** D113
+**Priority:** High
+**Dependencies:** T33.4
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:errors`
+
+---
+
+### S34: Budget, guards & MCP observability
+
+**Type:** Story
+**Title:** Participate in Phase 7 budget dimensions and emit bounded-cardinality MCP metrics
+**Description:** MCP calls participate in `wall_clock` and `tool_calls` budget dimensions (no new dimension). Three MCP-specific Prometheus metrics are emitted via an optional `mcp.MetricsRecorder` interface with bounded labels — server names pinned at `New` time cap cardinality at ≤ 32.
+**Priority:** High
+**Dependencies:** S32
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:budget`, `area:telemetry`
+
+#### T34.1: Budget participation — `wall_clock` + `tool_calls`
+
+**Type:** Task
+**Title:** MCP calls participate in the `wall_clock` and `tool_calls` budget dimensions
+**Acceptance criteria:**
+- Each MCP Invoke increments the `tool_calls` counter
+- Wall-clock elapsed between send and receive counted against `wall_clock`
+- No new budget dimension introduced
+**Decision refs:** D112, D129
+**Priority:** Highest
+**Dependencies:** T32.4
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:budget`
+
+#### T34.2: `MaxResponseBytes` adapter-local guard
+
+**Type:** Task
+**Title:** Implement the adapter-local `MaxResponseBytes` guard with a 16 MiB default
+**Acceptance criteria:**
+- Default value: 16 MiB
+- Configurable via `WithMaxResponseBytes`
+- Enforced at the transport boundary, not at the budget layer
+**Decision refs:** D112
+**Priority:** High
+**Dependencies:** T30.5, T33.7
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:budget`
+
+#### T34.3: Optional `mcp.MetricsRecorder` interface
+
+**Type:** Task
+**Title:** Define the optional `mcp.MetricsRecorder` interface using the type-assertion pattern
+**Description:** Mirrors the Phase 4 MetricsRecorder idiom: a separate interface in the `mcp` package. If the caller-supplied recorder implements it, MCP metrics flow; if not, they are silently dropped.
+**Acceptance criteria:**
+- Interface defined in `mcp` package (not in core)
+- Type-assertion fallback tested
+- Silent drop path tested
+**Decision refs:** D115
+**Priority:** High
+**Dependencies:** T30.5
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:telemetry`
+
+#### T34.4: `praxis_mcp_calls_total` counter
+
+**Type:** Task
+**Title:** Emit `praxis_mcp_calls_total` counter with bounded labels
+**Acceptance criteria:**
+- Labels: `server` (≤ 32 pinned LogicalNames), `transport` (`stdio`|`http`), `status` (`ok`|`error`|`denied`), `kind` (for errors)
+- Cardinality bounded at construction time
+**Decision refs:** D115
+**Priority:** High
+**Dependencies:** T34.3
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:telemetry`
+
+#### T34.5: `praxis_mcp_call_duration_seconds` histogram
+
+**Type:** Task
+**Title:** Emit `praxis_mcp_call_duration_seconds` histogram
+**Acceptance criteria:**
+- Buckets aligned with the core tool-call duration histogram
+- Labels: `server`, `transport`
+**Decision refs:** D115
+**Priority:** High
+**Dependencies:** T34.3
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:telemetry`
+
+#### T34.6: `praxis_mcp_transport_errors_total` counter
+
+**Type:** Task
+**Title:** Emit `praxis_mcp_transport_errors_total` counter
+**Acceptance criteria:**
+- Labels: `server`, `transport`, `kind` (`network`|`protocol`|`schema`|`circuit_open`|`handshake`)
+- Covers only transport-layer failures (not tool-level errors, which go to `praxis_mcp_calls_total`)
+**Decision refs:** D115
+**Priority:** High
+**Dependencies:** T34.3
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:telemetry`
+
+#### T34.7: Bounded label enforcement
+
+**Type:** Task
+**Title:** Enforce bounded label cardinality at `New` time
+**Description:** The 32-server cap from S30 T30.4 combined with a fixed set of transport/status/kind values guarantees a finite label-space. Unit test asserts the expected upper bound.
+**Acceptance criteria:**
+- Unit test computes the theoretical max cardinality and asserts it
+- No code path can emit a label value outside the pinned set
+**Decision refs:** D115
+**Priority:** High
+**Dependencies:** T34.4, T34.5, T34.6
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:telemetry`, `area:testing`
+
+---
+
+### S35: Trust boundary, tests, examples & docs
+
+**Type:** Story
+**Title:** Classify the MCP edge as an untrusted boundary, ship tests & examples, close out Phase 7 docs
+**Description:** Document the MCP transport edge as a Phase 5 untrusted-output boundary (PostToolFilter applies verbatim to flattened results), verify SignedIdentity is not forwarded, hit the 85% coverage gate, ship two runnable examples, and update the main README.
+**Priority:** High
+**Dependencies:** S33, S34
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:security`, `area:testing`, `area:docs`
+
+#### T35.1: Document the MCP edge as a Phase 5 untrusted boundary
+
+**Type:** Task
+**Title:** Document the MCP transport edge as a Phase 5 untrusted-output boundary
+**Acceptance criteria:**
+- Package godoc classifies the MCP edge explicitly
+- No new filter or hook introduced (D116)
+**Decision refs:** D116
+**Priority:** High
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:security`, `area:docs`
+
+#### T35.2: PostToolFilter applies verbatim to MCP results
+
+**Type:** Task
+**Title:** Verify `PostToolFilter` applies verbatim to flattened MCP tool results
+**Acceptance criteria:**
+- Integration test: custom PostToolFilter receives flattened output
+- Empty-content case exercised
+**Decision refs:** D116
+**Priority:** High
+**Dependencies:** T35.1, T33.3
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:security`, `area:testing`
+
+#### T35.3: SignedIdentity NOT forwarded
+
+**Type:** Task
+**Title:** Verify `SignedIdentity` is not forwarded to external MCP servers
+**Description:** Explicit test ensures the adapter never writes the signed-identity JWT into any outbound MCP frame (neither stdio nor HTTP).
+**Acceptance criteria:**
+- Unit test inspects all outbound frames in the fake transport — SignedIdentity absent
+- Assertion applies to both stdio and HTTP transports
+**Decision refs:** D118
+**Priority:** Highest
+**Dependencies:** T31.6
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:security`, `area:identity`
+
+#### T35.4: HTTP goroutine-scope isolation breach documented
+
+**Type:** Task
+**Title:** Document the HTTP-transport goroutine-scope isolation breach as known residual risk
+**Description:** Record the accepted deviation: HTTP connection-reuse goroutines transiently read the bearer-token header. Ship as godoc + CHANGELOG entry + SECURITY.md update.
+**Acceptance criteria:**
+- Residual risk OI-MCP-2 documented in package godoc
+- SECURITY.md entry added
+**Decision refs:** D117, D119
+**Priority:** High
+**Dependencies:** T31.5
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:security`, `area:docs`
+
+#### T35.5: 85% coverage gate for `praxis/mcp`
+
+**Type:** Task
+**Title:** Reach ≥ 85% line coverage on the `praxis/mcp` sub-module
+**Acceptance criteria:**
+- Unit + adapter tests achieve ≥ 85% line coverage
+- Uncovered paths explicitly justified
+**Decision refs:** D86
+**Priority:** High
+**Dependencies:** T32.6, T35.2, T35.3
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:testing`, `area:quality`
+
+#### T35.6: `examples/mcp/stdio/`
+
+**Type:** Task
+**Title:** Create `examples/mcp/stdio/` runnable example
+**Acceptance criteria:**
+- Example composes an orchestrator with one stdio MCP server
+- Uses the fake transport OR a documented local MCP server
+- Builds and runs
+**Decision refs:** D119
+**Priority:** Medium
+**Dependencies:** T31.4
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:examples`
+
+#### T35.7: `examples/mcp/http/`
+
+**Type:** Task
+**Title:** Create `examples/mcp/http/` runnable example
+**Acceptance criteria:**
+- Example composes an orchestrator with one HTTP MCP server
+- Uses bearer-token credential resolver
+- Builds and runs
+**Decision refs:** D108, D117
+**Priority:** Medium
+**Dependencies:** T31.5
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:examples`
+
+#### T35.8: README — Tool integrations — MCP
+
+**Type:** Task
+**Title:** Add a "Tool integrations — MCP" section to the main README linking to sub-module godoc
+**Acceptance criteria:**
+- README section explains the sub-module model
+- Links to godoc, examples, and D120 non-goals
+**Decision refs:** D106, D120
+**Priority:** Medium
+**Dependencies:** T30.8
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:docs`
+
+#### T35.9: Banned-identifier grep on `praxis/mcp`
+
+**Type:** Task
+**Title:** Run banned-identifier grep against `praxis/mcp` and confirm zero matches
+**Acceptance criteria:**
+- CI banned-grep job applied to `praxis/mcp` sub-tree
+- Zero matches for consumer brand names, forbidden attributes, milestone codes from other repos
+**Decision refs:** D94
+**Priority:** High
+**Dependencies:** T35.5
+**Labels:** `milestone:v0.7.0`, `area:mcp`, `area:ci`, `area:quality`
+
+---
+
+## Epic 5: PRAX — v0.9.0 Skills Integration
+
+**Type:** Epic
+**Title:** v0.9.0 — Skills Integration
+**Description:** First release of the `praxis/skills` sub-module at `github.com/praxis-os/praxis/skills`. Implements Phase 8 (decisions D122–D135): the `SKILL.md` bundle format loader (`skills.Open` / `skills.Load`), the `skills.WithSkill` orchestrator option, panic-on-duplicate-name collision, and the Phase 6 release-pipeline amendment that extends the manifest to a three-package form (core + mcp + skills). `praxis/skills` does NOT import `praxis/mcp`; callers compose both sub-modules explicitly.
+**Priority:** Highest
+**Dependencies:** Epic 4 (v0.7.0)
+**Labels:** `milestone:v0.9.0`
+
+---
+
+### S36: praxis/skills sub-module & release pipeline scaffolding
+
+**Type:** Story
+**Title:** Scaffold `praxis/skills` Go sub-module and extend release-please to a three-package manifest
+**Description:** Create the `praxis/skills` Go module directory with its own `go.mod` and internal version file, then extend the release-please configuration from the two-package form (core + mcp) to a three-package form (core + mcp + skills). Mirrors S29 structurally.
+**Priority:** Highest
+**Dependencies:** Epic 4 (v0.7.0)
+**Labels:** `milestone:v0.9.0`, `area:build`, `area:skills`
+
+#### T36.1: Create `praxis/skills/go.mod`
+
+**Type:** Task
+**Title:** Create `praxis/skills/go.mod` with module path `github.com/praxis-os/praxis/skills`
+**Acceptance criteria:**
+- `praxis/skills/go.mod` exists with module path `github.com/praxis-os/praxis/skills`
+- `go build ./skills/...` succeeds
+- `praxis/skills` does NOT import `praxis/mcp` (verified by import-graph check)
+**Decision refs:** D122, D131
+**Priority:** Highest
+**Labels:** `milestone:v0.9.0`, `area:build`, `area:skills`
+
+#### T36.2: Add `skills/internal/version/version.go`
+
+**Type:** Task
+**Title:** Add `skills/internal/version/version.go` tracked by release-please
+**Acceptance criteria:**
+- File exists with a `const Version = "..."` constant
+- File path matches the `extra-files` entry in the release-please config
+**Decision refs:** D135
+**Priority:** High
+**Dependencies:** T36.1
+**Labels:** `milestone:v0.9.0`, `area:build`, `area:skills`
+
+#### T36.3: Extend release-please config with `skills` package
+
+**Type:** Task
+**Title:** Extend `.github/release-please-config.json` with the `skills` package entry (three-package form)
+**Acceptance criteria:**
+- Config contains `.`, `mcp`, and `skills` entries
+- `skills` entry has `release-type: go` and extra-files pointing at `skills/internal/version/version.go`
+**Decision refs:** D135
+**Priority:** Highest
+**Dependencies:** T36.2, T29.3
+**Labels:** `milestone:v0.9.0`, `area:build`, `area:skills`
+
+#### T36.4: Extend release-please manifest with `skills` key
+
+**Type:** Task
+**Title:** Extend `.github/release-please-manifest.json` with the `skills` key
+**Acceptance criteria:**
+- Manifest contains `.`, `mcp`, and `skills` entries
+- Initial `skills` version: `0.0.0`
+**Decision refs:** D135
+**Priority:** Highest
+**Dependencies:** T36.3
+**Labels:** `milestone:v0.9.0`, `area:build`, `area:skills`
+
+#### T36.5: Document `feat(skills):` / `fix(skills):` scope routing
+
+**Type:** Task
+**Title:** Document `feat(skills):` and `fix(skills):` commit-scope convention in CONTRIBUTING.md
+**Acceptance criteria:**
+- CONTRIBUTING.md "Commit scopes" section extended with `skills`
+- Example commits illustrated
+**Decision refs:** D135
+**Priority:** Medium
+**Dependencies:** T36.4, T29.5
+**Labels:** `milestone:v0.9.0`, `area:docs`, `area:build`
+
+#### T36.6: Dry-run release-please three-package verification
+
+**Type:** Task
+**Title:** Dry-run release-please in three-package mode before first `skills/v0.9.0` tag
+**Acceptance criteria:**
+- Dry-run output shows three independently-versioned release PRs
+- No regressions on the core and mcp release lines
+- Tag format `skills/v0.9.0` validated
+**Decision refs:** D135
+**Priority:** High
+**Dependencies:** T36.5
+**Labels:** `milestone:v0.9.0`, `area:ci`, `area:build`
+
+---
+
+### S37: Skill value type & SKILL.md loader
+
+**Type:** Story
+**Title:** Implement the `Skill` value type, frontmatter loader, and path-traversal-safe filesystem access
+**Description:** Ship the core of the sub-module: a read-only `Skill` value type with accessors for the canonical and extension fields, a YAML frontmatter parser following the permissive-preserve policy, an `Open(fs.FS, root)` primary loader, a `Load(path)` thin wrapper, and typed `SkillWarning` variants.
+**Priority:** Highest
+**Dependencies:** S36
+**Labels:** `milestone:v0.9.0`, `area:skills`, `area:api`
+
+#### T37.1: `Skill` value type with read-only accessors
+
+**Type:** Task
+**Title:** Define `Skill` value type with Name/Description/License/Compatibility/Metadata/AllowedTools/Extensions accessors
+**Acceptance criteria:**
+- All accessors return copies or immutable views
+- `Extensions()` returns `map[string]any` of unknown frontmatter fields
+- Zero-value skill rejected by the loader
+**Decision refs:** D123
+**Priority:** Highest
+**Dependencies:** T36.1
+**Labels:** `milestone:v0.9.0`, `area:skills`, `area:api`
+
+#### T37.2: YAML frontmatter parser (permissive-preserve)
+
+**Type:** Task
+**Title:** Implement `internal/frontmatter/` YAML parser with permissive-preserve unknown-field policy
+**Description:** Unknown fields are preserved verbatim via the `Extensions()` accessor; recognised fields are strictly typed. YAML library choice: `gopkg.in/yaml.v3` as primary candidate, `go.yaml.in/yaml/v3` as fallback (final choice gated on govulncheck at implementation time).
+**Acceptance criteria:**
+- Required fields (`name`, `description`) validated
+- Optional recognised fields (`license`, `compatibility`, `metadata`, `allowed-tools`) parsed
+- Unknown fields preserved and exposed via `Extensions()`
+**Decision refs:** D123
+**Priority:** Highest
+**Dependencies:** T37.1
+**Labels:** `milestone:v0.9.0`, `area:skills`
+
+#### T37.3: `Open(fsys fs.FS, root string)` primary loader
+
+**Type:** Task
+**Title:** Implement `Open(fsys fs.FS, root string) (*Skill, []SkillWarning, error)` as the primary entry point
+**Acceptance criteria:**
+- Works with any `fs.FS` implementation (testable via `fstest.MapFS`)
+- Returns warnings for recoverable issues
+- Returns typed `LoadError` for fatal issues
+**Decision refs:** D124
+**Priority:** Highest
+**Dependencies:** T37.2
+**Labels:** `milestone:v0.9.0`, `area:skills`, `area:api`
+
+#### T37.4: `Load(path string)` thin wrapper
+
+**Type:** Task
+**Title:** Implement `Load(path string) (*Skill, []SkillWarning, error)` as a thin `os.DirFS` wrapper
+**Acceptance criteria:**
+- `Load` delegates to `Open` with `os.DirFS(filepath.Dir(path))`
+- Relative and absolute paths both supported
+**Decision refs:** D124
+**Priority:** High
+**Dependencies:** T37.3
+**Labels:** `milestone:v0.9.0`, `area:skills`, `area:api`
+
+#### T37.5: `SkillWarning` typed variants
+
+**Type:** Task
+**Title:** Define `SkillWarning` with variants `WarnExtensionField`, `WarnEmptyInstructions`, `WarnPathTraversal`
+**Acceptance criteria:**
+- Each variant carries a location (field name / file path)
+- Warnings are comparable
+- Documented strict-mode check: `len(warnings) == 0`
+**Decision refs:** D124, D132
+**Priority:** High
+**Dependencies:** T37.3
+**Labels:** `milestone:v0.9.0`, `area:skills`
+
+#### T37.6: Path resolution with traversal prevention
+
+**Type:** Task
+**Title:** Implement `internal/resolve/` with symlink and `..` traversal prevention
+**Acceptance criteria:**
+- Resolved paths never escape the `fs.FS` root
+- Symlinks leading outside the root produce `WarnPathTraversal` + `LoadError`
+- Covered by unit tests with malicious layouts
+**Decision refs:** D124
+**Priority:** Highest
+**Dependencies:** T37.3
+**Labels:** `milestone:v0.9.0`, `area:skills`, `area:security`
+
+---
+
+### S38: Typed LoadError & error catalogue
+
+**Type:** Story
+**Title:** Build the skill loader error catalogue on top of the Phase 4 `errors.TypedError` contract
+**Description:** All loader failures return a `LoadError` that implements `errors.TypedError` with stable `SkillSubKind` values. Audit confirms zero amendments to the Phase 3 frozen-v1.0 interface signatures.
+**Priority:** High
+**Dependencies:** S37
+**Labels:** `milestone:v0.9.0`, `area:skills`, `area:errors`
+
+#### T38.1: `LoadError` implements `errors.TypedError`
+
+**Type:** Task
+**Title:** Implement `LoadError` satisfying the full `errors.TypedError` contract
+**Acceptance criteria:**
+- Carries `Kind`, `SubKind`, `Cause`, `Attributes`
+- Passes the `errors.Classifier` round-trip test
+- Zero allocations on the hot path
+**Decision refs:** D132
+**Priority:** Highest
+**Dependencies:** T37.3
+**Labels:** `milestone:v0.9.0`, `area:skills`, `area:errors`
+
+#### T38.2: Stable `SkillSubKind` values
+
+**Type:** Task
+**Title:** Define the stable `SkillSubKind` catalogue
+**Description:** Stable values: `PathTraversal`, `FrontmatterInvalid`, `InstructionEmpty`, `FieldUnknown`, `FileNotFound`, `PermissionDenied`, `IOError`.
+**Acceptance criteria:**
+- All values exported and godoc-ed
+- Declared stable at `praxis/skills` v1.0.0 (tracked in error taxonomy)
+**Decision refs:** D132
+**Priority:** Highest
+**Dependencies:** T38.1
+**Labels:** `milestone:v0.9.0`, `area:skills`, `area:errors`
+
+#### T38.3: Strict-mode pattern documented
+
+**Type:** Task
+**Title:** Document the strict-mode pattern (`len(warnings) == 0`) in godoc
+**Description:** Callers who want a warnings-are-errors posture check `len(warnings) == 0` after `Open`/`Load`. This is not enforced by the library.
+**Acceptance criteria:**
+- Godoc example shows the pattern
+- README "Skills" section references the pattern
+**Decision refs:** D132
+**Priority:** Medium
+**Dependencies:** T37.5
+**Labels:** `milestone:v0.9.0`, `area:skills`, `area:docs`
+
+#### T38.4: Frozen-v1.0 signature audit
+
+**Type:** Task
+**Title:** Confirm zero amendments to Phase 3 frozen-v1.0 interface signatures
+**Description:** Audit that `praxis/skills` introduces no method additions, parameter changes, or return-type changes on any of the 14 frozen interfaces.
+**Acceptance criteria:**
+- Written audit report in `docs/phase-8-skills-integration/` (or linked)
+- CI check: interface-stability diff against the v0.5.0 tag shows zero changes
+**Decision refs:** D134
+**Priority:** Highest
+**Dependencies:** T37.1
+**Labels:** `milestone:v0.9.0`, `area:skills`, `area:api`, `area:quality`
+
+---
+
+### S39: Composition, injection & conflict resolution
+
+**Type:** Story
+**Title:** Wire `skills.WithSkill` into the orchestrator with deterministic ordering and panic-on-duplicate-name
+**Description:** Implements the composition model: a `WithSkill` orchestrator option that injects skill instructions as an additive system-prompt fragment at construction time, preserves call-order for determinism, and panics on duplicate skill names to prevent silent overrides.
+**Priority:** Highest
+**Dependencies:** S37
+**Labels:** `milestone:v0.9.0`, `area:skills`, `area:orchestrator`
+
+#### T39.1: `skills.WithSkill(*Skill) praxis.Option`
+
+**Type:** Task
+**Title:** Implement `skills.WithSkill(s *Skill) praxis.Option`
+**Acceptance criteria:**
+- Option is a no-op if `s == nil`
+- Preserves the frozen `NewOrchestrator` single-return signature
+- Multiple WithSkill calls compose
+**Decision refs:** D125
+**Priority:** Highest
+**Dependencies:** T37.1, T38.4
+**Labels:** `milestone:v0.9.0`, `area:skills`, `area:orchestrator`, `area:api`
+
+#### T39.2: Additive system-prompt fragment injection
+
+**Type:** Task
+**Title:** Inject skill instructions as an additive system-prompt fragment at construction time
+**Description:** No change to the frozen `LLMProvider` request surface. The fragment is composed into the existing system prompt at `NewOrchestrator` time, not per-call.
+**Acceptance criteria:**
+- Instruction fragment visible in the composed system prompt
+- Frozen `LLMProvider` request shape unchanged
+- Composition happens once at construction, not per-invoke
+**Decision refs:** D128, D134
+**Priority:** Highest
+**Dependencies:** T39.1
+**Labels:** `milestone:v0.9.0`, `area:skills`, `area:orchestrator`
+
+#### T39.3: Duplicate-name collision → panic at `NewOrchestrator` time
+
+**Type:** Task
+**Title:** Panic at `NewOrchestrator` time on duplicate `Skill.Name()`, naming both skills in the diagnostic
+**Acceptance criteria:**
+- Panic message names both conflicting skills
+- Unit test asserts the panic path
+- No silent override
+**Decision refs:** D125, D127
+**Priority:** Highest
+**Dependencies:** T39.1
+**Labels:** `milestone:v0.9.0`, `area:skills`, `area:orchestrator`
+
+#### T39.4: Deterministic fragment ordering by call order
+
+**Type:** Task
+**Title:** Preserve deterministic fragment ordering by `WithSkill` call order
+**Acceptance criteria:**
+- Fragment order matches option-application order
+- Unit test asserts stable composed output across runs
+**Decision refs:** D127
+**Priority:** High
+**Dependencies:** T39.2
+**Labels:** `milestone:v0.9.0`, `area:skills`, `area:orchestrator`, `area:testing`
+
+#### T39.5: Reserved `{skillName}__{toolName}` namespacing
+
+**Type:** Task
+**Title:** Document the reserved `{skillName}__{toolName}` namespacing convention
+**Description:** v1.0.0 no-op (skills do not declare new tools in frontmatter), but the convention is reserved to prevent future silent-dispatch hazards. Mirrors Phase 7 D111.
+**Acceptance criteria:**
+- Convention documented in package godoc
+- Cross-reference to D111 included
+**Decision refs:** D126
+**Priority:** Medium
+**Dependencies:** T37.1
+**Labels:** `milestone:v0.9.0`, `area:skills`, `area:docs`
+
+#### T39.6: `ComposedInstructions` debug helper
+
+**Type:** Task
+**Title:** Implement `ComposedInstructions(opts ...praxis.Option) string` debug helper
+**Description:** Test-oriented helper that returns the system-prompt fragment that would be composed for a given option list, without building a full orchestrator.
+**Acceptance criteria:**
+- Helper returns the exact composed string
+- Used by S39 tests
+- Godoc marks it as "intended for tests and diagnostics only"
+**Decision refs:** D128
+**Priority:** Medium
+**Dependencies:** T39.2
+**Labels:** `milestone:v0.9.0`, `area:skills`, `area:testing`
+
+---
+
+### S40: Budget & observability (skills extensions)
+
+**Type:** Story
+**Title:** Reuse Phase 7 budget dimensions verbatim and emit one bounded counter for loaded skills
+**Description:** Skills do not introduce new budget dimensions or per-skill sub-budgets (D129). Observability adds exactly one bounded counter — `praxis_skills_loaded_total` — with `status` as the only label; skill names are never used as metric labels. No new spans, no new event types.
+**Priority:** High
+**Dependencies:** S37, S34
+**Labels:** `milestone:v0.9.0`, `area:skills`, `area:budget`, `area:telemetry`
+
+#### T40.1: Verbatim Phase 7 budget reuse
+
+**Type:** Task
+**Title:** Verify skill-originated tool calls flow through Phase 7 `wall_clock` + `tool_calls` dimensions
+**Description:** Skill-originated calls hit the existing tool-call paths without new dimensions, sub-budgets, or double-counting.
+**Acceptance criteria:**
+- No new budget dimension code
+- Integration test confirms counters increment through the existing paths
+**Decision refs:** D129
+**Priority:** High
+**Dependencies:** T39.2, T34.1
+**Labels:** `milestone:v0.9.0`, `area:skills`, `area:budget`
+
+#### T40.2: `praxis_skills_loaded_total` counter
+
+**Type:** Task
+**Title:** Emit `praxis_skills_loaded_total` counter with `status` label only
+**Description:** Skill names are NEVER used as metric labels. Labels are restricted to `status` (`loaded`, `load_error`).
+**Acceptance criteria:**
+- Counter emitted at `NewOrchestrator` time for each WithSkill option
+- Only `status` label populated
+- Cardinality test confirms bounded label set
+**Decision refs:** D130
+**Priority:** High
+**Dependencies:** T39.1
+**Labels:** `milestone:v0.9.0`, `area:skills`, `area:telemetry`
+
+#### T40.3: Optional `skills.MetricsRecorder` interface
+
+**Type:** Task
+**Title:** Define the optional `skills.MetricsRecorder` interface via the type-assertion pattern
+**Acceptance criteria:**
+- Interface defined in `skills` package
+- Type-assertion fallback mirrors Phase 7 D115 pattern
+- Silent drop path tested
+**Decision refs:** D130
+**Priority:** High
+**Dependencies:** T40.2
+**Labels:** `milestone:v0.9.0`, `area:skills`, `area:telemetry`
+
+#### T40.4: No new spans / events audit
+
+**Type:** Task
+**Title:** Audit that `praxis/skills` introduces no new OTel spans and no new event types
+**Acceptance criteria:**
+- grep / import-graph check confirms no `tracer.Start` calls for skills-specific spans
+- No new `telemetry.Event` type introduced
+- Skills flow through existing orchestrator spans
+**Decision refs:** D130
+**Priority:** Medium
+**Dependencies:** T40.2
+**Labels:** `milestone:v0.9.0`, `area:skills`, `area:telemetry`, `area:quality`
+
+---
+
+### S41: Cross-module composition & non-goals
+
+**Type:** Story
+**Title:** Enforce that `praxis/skills` does not import `praxis/mcp` and publish the non-goals catalogue
+**Description:** Keep the two sub-modules decoupled: skills does not import mcp; callers compose both explicitly when needed. Publish the 11-item non-goals catalogue in the skills README.
+**Priority:** High
+**Dependencies:** S36, S37
+**Labels:** `milestone:v0.9.0`, `area:skills`, `area:mcp`, `area:docs`
+
+#### T41.1: Import-graph CI assertion
+
+**Type:** Task
+**Title:** Add a CI assertion that `praxis/skills` does NOT import `praxis/mcp`
+**Acceptance criteria:**
+- CI job runs `go list -m -f '{{.Imports}}' ./skills/...` (or equivalent)
+- Fails build if `praxis/mcp` appears in the import graph
+**Decision refs:** D131
+**Priority:** Highest
+**Dependencies:** T36.1
+**Labels:** `milestone:v0.9.0`, `area:skills`, `area:ci`, `area:quality`
+
+#### T41.2: Worked end-to-end example: skills + mcp
+
+**Type:** Task
+**Title:** Ship a worked end-to-end example composing `skills.WithSkill` with `mcp.New`
+**Description:** Matches §1.4 of `docs/phase-8-skills-integration/04-dx-and-errors.md`. Both sub-modules are composed by the caller, not by `praxis/skills` itself.
+**Acceptance criteria:**
+- Example compiles and runs
+- Demonstrates both sub-modules cooperating without a skills→mcp import
+**Decision refs:** D131
+**Priority:** High
+**Dependencies:** T39.1, T35.7
+**Labels:** `milestone:v0.9.0`, `area:skills`, `area:examples`
+
+#### T41.3: 11 binding non-goals documented
+
+**Type:** Task
+**Title:** Document the 11 binding Phase 8 non-goals in the `praxis/skills` README
+**Description:** Enumerate: no registry, no download, no runtime discovery, no hot-reload, no authoring tooling, no sandboxing, no mcp_servers recognised field, no provenance verification, no automatic credential injection, no consumer brand awareness, explicit D09 re-confirmation.
+**Acceptance criteria:**
+- All 11 non-goals listed verbatim
+- Each annotated with decision refs
+**Decision refs:** D133
+**Priority:** Medium
+**Dependencies:** T36.1
+**Labels:** `milestone:v0.9.0`, `area:skills`, `area:docs`
+
+#### T41.4: D09 / Non-goal 7 re-confirmation
+
+**Type:** Task
+**Title:** Cross-reference D09 / Phase 1 Non-goal 7 in the skills non-goals section
+**Acceptance criteria:**
+- Explicit cross-reference in README
+- Reinforces the "no runtime discovery, no plugin loading" stance
+**Decision refs:** D09, D133
+**Priority:** Low
+**Dependencies:** T41.3
+**Labels:** `milestone:v0.9.0`, `area:skills`, `area:docs`
+
+---
+
+### S42: Skills tests, coverage, examples & docs
+
+**Type:** Story
+**Title:** Ship the 85% coverage gate, runnable examples, README, and banned-grep enforcement for `praxis/skills`
+**Description:** Close out Phase 8 with the same quality bar used for core and mcp: 85% line coverage, godoc examples, runnable worked example, a README section, and banned-identifier grep.
+**Priority:** High
+**Dependencies:** S38, S39, S40, S41
+**Labels:** `milestone:v0.9.0`, `area:skills`, `area:testing`, `area:docs`
+
+#### T42.1: Loader / frontmatter / warnings tests
+
+**Type:** Task
+**Title:** Unit tests for traversal detection, frontmatter parsing, and warnings emission
+**Acceptance criteria:**
+- Path-traversal unit test with malicious `fs.FS` layout
+- Frontmatter tests for required/optional/unknown fields
+- All three `SkillWarning` variants exercised
+**Decision refs:** D123, D124
+**Priority:** High
+**Dependencies:** T37.3, T37.5, T37.6
+**Labels:** `milestone:v0.9.0`, `area:skills`, `area:testing`, `area:security`
+
+#### T42.2: Duplicate-name panic & ordering tests
+
+**Type:** Task
+**Title:** Unit tests for duplicate-name panic and deterministic fragment ordering
+**Acceptance criteria:**
+- Test asserts panic message names both skills
+- Test asserts stable composed output across runs
+**Decision refs:** D125, D127
+**Priority:** High
+**Dependencies:** T39.3, T39.4
+**Labels:** `milestone:v0.9.0`, `area:skills`, `area:testing`
+
+#### T42.3: 85% coverage gate for `praxis/skills`
+
+**Type:** Task
+**Title:** Reach ≥ 85% line coverage on the `praxis/skills` sub-module
+**Acceptance criteria:**
+- Unit + composition tests achieve ≥ 85% line coverage
+- Uncovered paths explicitly justified
+**Decision refs:** D86
+**Priority:** High
+**Dependencies:** T42.1, T42.2
+**Labels:** `milestone:v0.9.0`, `area:skills`, `area:testing`, `area:quality`
+
+#### T42.4: `examples_test.go` godoc examples
+
+**Type:** Task
+**Title:** Add `examples_test.go` godoc examples for `Open`, `Load`, and `WithSkill`
+**Acceptance criteria:**
+- At least one `Example*` function per primary API
+- `go test ./skills/...` validates examples compile and match expected output
+**Priority:** Medium
+**Dependencies:** T37.4, T39.1
+**Labels:** `milestone:v0.9.0`, `area:skills`, `area:examples`, `area:docs`
+
+#### T42.5: Runnable worked example
+
+**Type:** Task
+**Title:** Ship a runnable worked example for skill loading + orchestrator composition
+**Acceptance criteria:**
+- `examples/skills/` directory with a runnable main
+- Loads a sample `SKILL.md` bundle
+- Demonstrates strict-mode pattern (`len(warnings) == 0`)
+**Decision refs:** D132
+**Priority:** Medium
+**Dependencies:** T37.4, T39.1
+**Labels:** `milestone:v0.9.0`, `area:skills`, `area:examples`
+
+#### T42.6: README — Skills section
+
+**Type:** Task
+**Title:** Add a "Skills" section to the main README with cross-reference to Claude Code `.claude/skills/`
+**Description:** Cross-reference (not disambiguation) — both ecosystems use similar directory names; the reference clarifies different contexts and intended audiences.
+**Acceptance criteria:**
+- README "Skills" section present
+- Cross-reference to Claude Code `.claude/skills/` included
+- Links to sub-module godoc and worked example
+**Decision refs:** D132
+**Priority:** Medium
+**Dependencies:** T42.5
+**Labels:** `milestone:v0.9.0`, `area:skills`, `area:docs`
+
+#### T42.7: Banned-identifier grep on `praxis/skills`
+
+**Type:** Task
+**Title:** Run banned-identifier grep against `praxis/skills` and confirm zero matches
+**Acceptance criteria:**
+- CI banned-grep job applied to `praxis/skills` sub-tree
+- Zero matches for consumer brand names, forbidden attributes, milestone codes from other repos
+**Decision refs:** D94
+**Priority:** High
+**Dependencies:** T42.3
+**Labels:** `milestone:v0.9.0`, `area:skills`, `area:ci`, `area:quality`
+
+---
+
+## Epic 6: PRAX — v1.0.0 API Freeze
 
 **Type:** Epic
 **Title:** v1.0.0 — API Freeze
-**Description:** The stability commitment. Interface surface frozen, semver contract in effect, first production consumer validated. All v0.5.0 criteria remain satisfied.
+**Description:** The stability commitment. Interface surface frozen, semver contract in effect, first production consumer validated. All v0.9.0 criteria remain satisfied (re-anchored from v0.5.0 to v0.9.0 on 2026-04-10 so the first consumer has exercised MCP and/or Skills in production before the freeze).
 **Priority:** High
-**Dependencies:** Epic 3 (v0.5.0)
+**Dependencies:** Epic 5 (v0.9.0)
 **Labels:** `milestone:v1.0.0`
+
+> **Note on story numbering:** Stories S26, S27, S28 below were originally decomposed for Phase 6 (v1.0.0) before Phases 7 and 8 were added. They retain their `S26`/`S27`/`S28` identifiers for Jira continuity (issue keys `PRAX-34`/`PRAX-35`/`PRAX-36`), even though in execution order they run *after* S29–S42 (Phases 7 and 8).
 
 ---
 
@@ -1668,19 +2974,20 @@
 
 **Type:** Story
 **Title:** Production consumer attestation gate
-**Description:** v1.0.0 requires a production consumer to have shipped against a v0.5.x tag in production (serving real traffic, not staging). Maintainer attestation recorded in release notes.
+**Description:** v1.0.0 requires a production consumer to have shipped against a v0.9.x tag in production (serving real traffic, not staging). Maintainer attestation recorded in release notes. Re-anchored from v0.5.x to v0.9.x on 2026-04-10 (D91 update) so the first consumer has exercised the MCP and/or Skills sub-modules in production before the freeze.
 **Priority:** Highest
-**Dependencies:** Epic 3 (v0.5.0)
+**Dependencies:** Epic 5 (v0.9.0)
 **Labels:** `milestone:v1.0.0`, `area:governance`
 
 #### T26.1: Consumer attestation in release notes
 
 **Type:** Task
 **Title:** Record production consumer attestation in v1.0.0 release notes
-**Description:** Dedicated release notes section documenting: consumer identity, version used, date of production deployment.
+**Description:** Dedicated release notes section documenting: consumer identity, version used (must be a `v0.9.x` tag per the 2026-04-10 re-anchoring of D91), date of production deployment, and which of MCP / Skills / both were exercised in production.
 **Acceptance criteria:**
 - Release notes contain consumer attestation section
 - Consumer identity, version, and deployment date recorded
+- Attested version is a `v0.9.x` tag (not `v0.5.x`)
 **Decision refs:** D91
 **Priority:** Highest
 **Labels:** `milestone:v1.0.0`, `area:governance`
@@ -1831,10 +3138,10 @@
 
 | Level | Count |
 |-------|-------|
-| Epics | 4 |
-| Stories | 28 |
-| Tasks | 92 |
-| **Total tickets** | **124** |
+| Epics | 6 |
+| Stories | 42 |
+| Tasks | 205 |
+| **Total tickets** | **253** |
 
 ## Appendix: Label Taxonomy
 
@@ -1843,6 +3150,8 @@
 | `milestone:v0.1.0` | First Invocation |
 | `milestone:v0.3.0` | Interfaces Stable |
 | `milestone:v0.5.0` | Feature Complete |
+| `milestone:v0.7.0` | `praxis/mcp` sub-module first release (Phase 7) |
+| `milestone:v0.9.0` | `praxis/skills` sub-module first release (Phase 8) |
 | `milestone:v1.0.0` | API Freeze |
 | `area:build` | Module, Makefile, CI, release tooling |
 | `area:state-machine` | Invocation state machine |
@@ -1856,7 +3165,7 @@
 | `area:cancellation` | Soft/hard cancel, detached context |
 | `area:hooks` | PolicyHook chain |
 | `area:filters` | PreLLM/PostTool filter chains |
-| `area:budget` | Budget guard, 4 dimensions |
+| `area:budget` | Budget guard, dimensions |
 | `area:telemetry` | OTel, metrics, slog, events |
 | `area:identity` | Ed25519 signing, JWT, identity chaining |
 | `area:credentials` | Credential resolver, zeroing |
@@ -1867,6 +3176,9 @@
 | `area:quality` | Quality gates, coverage |
 | `area:governance` | Contribution model, RFC, DCO |
 | `area:api` | API freeze, interface stability |
+| `area:mcp` | `praxis/mcp` sub-module — MCP transports, adapter, namespacing, sessions |
+| `area:skills` | `praxis/skills` sub-module — SKILL.md loader, composition, warnings |
+| `area:tools` | `tools.Invoker` integration and namespacing |
 
 ## Appendix: Critical Path
 
@@ -1875,5 +3187,7 @@ D10 resolution → S1 (Module Init) → S2 (State Machine) + S4 (Errors) + S5 (A
     → S3 (Orchestrator.Invoke) → S7 (Docs) + S8 (Quality Gate) → v0.1.0 tag
     → S9–S15 (Streaming, Hooks, Filters, Budget, Telemetry, OpenAI) → S16–S17 (Quality + Examples) → v0.3.0 tag
     → S18–S23 (Identity, Credentials, Security, Observability, Errors, Benchmarks) → S24–S25 (Quality + Examples) → v0.5.0 tag
-    → Production consumer ships → S26–S28 (Consumer Gate, API Freeze, Governance) → v1.0.0 tag
+    → S29 (mcp sub-module scaffold) → S30–S34 (API, Transports, Adapter, Errors, Budget/Metrics) → S35 (Trust/Tests/Docs) → v0.7.0 tag (mcp/v0.7.0)
+    → S36 (skills sub-module scaffold) → S37–S41 (Skill/Loader, Errors, Composition, Budget/Metrics, Cross-module) → S42 (Tests/Docs) → v0.9.0 tag (skills/v0.9.0)
+    → Production consumer ships on a v0.9.x tag → S26–S28 (Consumer Gate, API Freeze, Governance) → v1.0.0 tag
 ```

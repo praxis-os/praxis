@@ -193,19 +193,19 @@ release-please generates `CHANGELOG.md` in keep-a-changelog format:
 ```markdown
 # Changelog
 
-## [0.3.0](https://github.com/praxis-go/praxis/compare/v0.1.0...v0.3.0) (2026-07-15)
+## [0.3.0](https://github.com/praxis-os/praxis/compare/v0.1.0...v0.3.0) (2026-07-15)
 
 ### Added
 
-* **orchestrator:** add InvokeStream with 16-event channel buffer ([#42](https://github.com/praxis-go/praxis/pull/42))
+* **orchestrator:** add InvokeStream with 16-event channel buffer ([#42](https://github.com/praxis-os/praxis/pull/42))
 
 ### Fixed
 
-* **llm/anthropic:** handle empty content block in tool-use response ([#38](https://github.com/praxis-go/praxis/pull/38))
+* **llm/anthropic:** handle empty content block in tool-use response ([#38](https://github.com/praxis-os/praxis/pull/38))
 
 ### Changed
 
-* **hooks:** rename FilterResult to FilterDecision for clarity ([#40](https://github.com/praxis-go/praxis/pull/40))
+* **hooks:** rename FilterResult to FilterDecision for clarity ([#40](https://github.com/praxis-os/praxis/pull/40))
 ```
 
 ### 3.2 Maintenance
@@ -232,7 +232,7 @@ Before merging a release-please PR, the maintainer verifies:
 After merging:
 1. Verify the GitHub release was created with the correct tag.
 2. Verify the release attestation is attached.
-3. Run `go get github.com/praxis-go/praxis@vX.Y.Z` from a clean module
+3. Run `go get github.com/praxis-os/praxis@vX.Y.Z` from a clean module
    to confirm the tag is consumable.
 4. For milestone releases, post an announcement in GitHub Discussions
    (Announcements category).

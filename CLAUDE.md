@@ -9,7 +9,7 @@ budget enforcement, typed error taxonomy, OpenTelemetry observability, and optio
 agent identity signing.
 
 **License:** Apache 2.0
-**Module:** `github.com/praxis-go/praxis` (to be confirmed at first public commit)
+**Module:** `github.com/praxis-os/praxis`
 **Minimum Go version:** 1.23+
 **Target:** `v1.0.0` — stable public Go API that enterprise teams reach for when
 "call an LLM in a loop" is not enough.
@@ -66,7 +66,7 @@ sections):**
 
 ### Planning Phases
 
-The design of `praxis v1.0` is broken into 6 planning phases:
+The design of `praxis v1.0` is broken into 8 planning phases:
 
 1. **API Scope and Positioning** — what praxis is, positioning vs existing Go
    libraries, design principles, target consumers, what v1.0 commits to, what is
@@ -90,16 +90,42 @@ The design of `praxis v1.0` is broken into 6 planning phases:
    (conventional commits + release-please), CI pipeline (lint, test, coverage,
    benchmarks, banned-identifier grep, govulncheck, codeql), contribution model,
    code of conduct, RFC process.
+7. **MCP Integration** — whether and how praxis supports the Model Context
+   Protocol at v1.0.0 (in-tree adapter vs. pattern-only), integration model via
+   `tools.Invoker`, credential flow, transport priority, observability extensions,
+   trust-boundary classification, compatibility with the "no plugins in v1"
+   commitment (D09). Added after Phase 6 was approved; blocks v1.0.0 freeze.
+8. **Skills Integration** — whether and how praxis supports the provider-side
+   "skills" concept at v1.0.0 (first-class type vs. convention vs. non-goal),
+   relationship to `LLMProvider` and `tools.Invoker`, budget participation,
+   observability additions, DX and terminology disambiguation. Depends on
+   Phase 7; blocks v1.0.0 freeze.
 
-Implementation begins only after Phase 6 is approved. Release targets:
+Implementation begins only after **all 8 planning phases are approved**. Release
+targets (implementation order runs `5 → 7 → 8 → 6` because Phase 6 is the
+API-freeze phase and depends on both `praxis/mcp` and `praxis/skills` being stable):
 
 - **v0.1.0** — first working invocation with Anthropic provider, no hooks, no filters,
-  no budget. First consumable tag.
-- **v0.3.0** — all v1.0 interfaces stable, hooks + filters + budget + telemetry
-  functional, OpenAI adapter shipped.
-- **v0.5.0** — feature complete, ≥85% coverage, benchmarks green, ready for first
-  production consumer.
-- **v1.0.0** — API freeze committed after the first production consumer ships.
+  no budget. First consumable tag. **SHIPPED.**
+- **v0.3.0** — all v1.0 core interfaces stable, hooks + filters + budget + telemetry
+  functional, OpenAI adapter shipped. **SHIPPED.**
+- **v0.5.0** — core module feature complete, ≥85% coverage, benchmarks green.
+  **SHIPPED** (tag `v0.5.0`, commit `65daa89`).
+- **v0.7.0** — `praxis/mcp` sub-module first release. Implements Phase 7
+  (D106–D121): stdio + Streamable HTTP transports, `{logicalName}__{mcpTool}`
+  tool namespacing, credential flow, trust-boundary hardening. Core module
+  surface unchanged at v0.5.x. First concrete task: the release-pipeline
+  amendment from D121 (`.github/release-please-config.json` single-package →
+  two-package form).
+- **v0.9.0** — `praxis/skills` sub-module first release. Implements Phase 8
+  (D122–D135): `SKILL.md` loader, `skills.Open` / `skills.Load`,
+  `skills.WithSkill` orchestrator option, panic-on-duplicate-name collision.
+  `praxis/skills` does NOT import `praxis/mcp`; callers compose both
+  sub-modules explicitly. Release-pipeline amendment from D135 extends the
+  manifest to the three-package form.
+- **v1.0.0** — API freeze committed after the first production consumer ships
+  on a `v0.9.x` tag (D91 gate, re-anchored from `v0.5.x` to `v0.9.x` on
+  2026-04-10 so the consumer has exercised MCP and/or Skills in production).
   Breaking changes after this point require a `v2` module path.
 
 ## Conventions
@@ -120,6 +146,8 @@ All phase output files use a two-digit numbered prefix for reading order:
 - `docs/phase-4-observability-errors/`
 - `docs/phase-5-security-trust/`
 - `docs/phase-6-release-governance/`
+- `docs/phase-7-mcp-integration/`
+- `docs/phase-8-skills-integration/`
 
 ### Phase States
 
@@ -140,6 +168,18 @@ code, godoc on every exported symbol.
 
 ### Current Status
 
-Planning has not yet started. The only artifact is `docs/PRAXIS-SEED-CONTEXT.md`
-(frozen baseline from project extraction). Next step: run `plan-phase` on Phase 1
-"API Scope and Positioning".
+All 8 planning phases are `approved`. 134 decisions adopted across D01–D135
+(contiguous; Phase 8's range was extended by one decision on 2026-04-10 to
+record the release-pipeline amendment obligation analogous to Phase 7
+D121). All 14 originally planned public interfaces remain at `frozen-v1.0`;
+all new types in `praxis/mcp` (D106–D121) and `praxis/skills` (D122–D135)
+live in their respective sub-modules at `stable-v0.x-candidate`.
+
+Core module shipped through **v0.5.0**. The next live implementation
+target is **v0.7.0 — the `praxis/mcp` sub-module** (Phase 7), followed by
+**v0.9.0 — the `praxis/skills` sub-module** (Phase 8), then **v1.0.0 — the
+API freeze** (Phase 6's production-consumer gate, re-anchored from
+`v0.5.x` to `v0.9.x`). Detailed exit criteria live in
+`docs/phase-6-release-governance/06-release-milestones.md` sections 4, 5,
+and 6 respectively. The `golang-pro` implementation subagent drives the
+code changes from here on.

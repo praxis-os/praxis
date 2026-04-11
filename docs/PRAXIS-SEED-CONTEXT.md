@@ -1,6 +1,6 @@
 # praxis — Seed Context
 
-> Foundational design document for `github.com/praxis-go/praxis`.
+> Foundational design document for `github.com/praxis-os/praxis`.
 > This file is the combined PRD and working-context note for the project.
 > All subsequent design phases reference it as the source of truth for scope,
 > architecture, and principles.
@@ -394,7 +394,7 @@ praxis/
 ├── CONTRIBUTING.md            Dev setup, commit convention, review flow
 ├── SECURITY.md                Vulnerability disclosure process
 ├── CHANGELOG.md               release-please managed
-├── go.mod / go.sum            Module: github.com/praxis-go/praxis
+├── go.mod / go.sum            Module: github.com/praxis-os/praxis
 ├── Makefile                   test, lint, bench, coverage, banned-grep
 ├── .github/workflows/         ci, bench, codeql, release-please
 ├── docs/
@@ -483,7 +483,7 @@ phase-1 decisions log.
   subsequent minor releases before removal is considered. Removal is itself
   a breaking change requiring v2.
 - **Module path rule.** v2 and beyond use a versioned module path
-  (`github.com/praxis-go/praxis/v2`). v1 consumers are never auto-upgraded.
+  (`github.com/praxis-os/praxis/v2`). v1 consumers are never auto-upgraded.
 - **Changelog discipline.** Every tag has a `CHANGELOG.md` entry generated
   by release-please from conventional commits, grouped into Added, Changed,
   Deprecated, Removed, Fixed, Security.

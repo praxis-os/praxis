@@ -77,7 +77,7 @@ questions for phase 1):
    re-priced? (Seed §13.3.)
 9. Is "no plugins in v1" re-confirmed, and is the rationale recorded in a
    decision that future RFCs can point at? (Seed §13.4.)
-10. Is the module path `github.com/praxis-go/praxis` confirmed available on
+10. Is the module path `github.com/praxis-os/praxis` confirmed available on
     GitHub, pkg.go.dev, and clean from trademark conflict? (Seed risk §14.3.)
 11. Are there *any* non-goals not already explicit in the seed — for example:
     no built-in HTTP handler, no multi-agent orchestration, no prompt template
@@ -132,7 +132,7 @@ Phase 1 owns the D01–D15 range. Sequential allocation; reviewer may compress.
 - The banned-identifier list in seed §6.1 is complete enough to enforce the
   decoupling contract; Phase 6 will formalize the CI check. **(Weak — new
   leakage categories are likely to be discovered. Flagged.)**
-- `github.com/praxis-go/praxis` is available as a module path and `praxis`
+- `github.com/praxis-os/praxis` is available as a module path and `praxis`
   is clear for use. **(Unvalidated — D10 must check this.)**
 
 ## Risks
@@ -223,7 +223,7 @@ not listed here.)
 6. Banned-identifier grep over `docs/phase-1-api-scope/**` returns zero
    matches against the seed §6.1 list. Reviewer records the grep command and
    result in `REVIEW.md`.
-7. Module path `github.com/praxis-go/praxis` is confirmed available, or a
+7. Module path `github.com/praxis-os/praxis` is confirmed available, or a
    rename is recorded in D10 and propagated to the seed via amendment note.
 8. `reviewer` subagent returns PASS with no unresolved blockers.
 9. `REVIEW.md` verdict is `READY`.

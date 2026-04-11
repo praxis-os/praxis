@@ -33,7 +33,8 @@ cover:
 
 # Check for banned identifiers (decoupling contract enforcement)
 # Scope: .go and .md files. Excludes phase docs, seed context, reviews,
-# and tooling config (.claude/, CLAUDE.md) which define the rules themselves.
+# tooling config (.claude/, CLAUDE.md), and the roadmap-status index
+# which all define or report on the rules themselves.
 banned-grep:
 	@echo "Checking for banned identifiers..."
 	@BANNED='custos|reef|governance.event|governance_event'; \
@@ -44,6 +45,7 @@ banned-grep:
 	  --exclude='REVIEW.md' \
 	  --exclude='CLAUDE.md' \
 	  --exclude='README.md' \
+	  --exclude='roadmap-status.md' \
 	  . || true); \
 	if [ -n "$$RESULT" ]; then \
 	  echo "BANNED IDENTIFIER FOUND:"; echo "$$RESULT"; exit 1; \
