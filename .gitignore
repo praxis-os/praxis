@@ -14,8 +14,15 @@
 coverage.html
 
 # Go workspace file
-go.work
-go.work.sum
+#
+# praxis is a multi-module monorepo (core + praxis/mcp, plus praxis/skills
+# from v0.9.0). The go.work file at the repo root is committed intentionally
+# so local dev and CI exercise every workspace module in a single command
+# (see Makefile MODULE_PATHS). go.work is NOT included in Go module zips,
+# so external consumers of either module never see it.
+#
+# go.work is intentionally NOT ignored.
+# go.work.sum is intentionally NOT ignored (transitive-dep reproducibility).
 
 # IDE
 .idea/
