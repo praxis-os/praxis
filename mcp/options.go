@@ -3,10 +3,14 @@
 package mcp
 
 import (
-	"github.com/praxis-os/praxis/credentials"
-	"github.com/praxis-os/praxis/telemetry"
+	"context"
+
+	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
+
+	"github.com/praxis-os/praxis/credentials"
+	"github.com/praxis-os/praxis/telemetry"
 )
 
 // DefaultMaxResponseBytes is the default upper bound on the size of a
@@ -19,6 +23,20 @@ import (
 // on typical deployments.
 const DefaultMaxResponseBytes int64 = 16 * 1024 * 1024
 
+// sessionOpener is the pluggable function shape that [New] uses
+// to open the set of MCP sessions at construction time. In
+// production code the field defaults to nil, in which case [New]
+// falls through to [openSessions] — the real SDK-backed path.
+//
+// Tests in the mcp package install a substitute opener via the
+// unexported `withSessionOpener` option declared in a _test.go
+// file, so the test-only code path never ships in production
+// binaries. The hook is a deliberate seam: it lets white-box
+// tests exercise the construction, rollback, and Close paths
+// with [sdkmcp.NewInMemoryTransports]-backed sessions (or none
+// at all) instead of spawning real child processes.
+type sessionOpener func(ctx context.Context, cfg config, servers []Server) ([]*sdkmcp.ClientSession, error)
+
 // config holds the resolved configuration for an [Invoker]. It is
 // populated by [Option]s at [New] time and then pinned for the
 // lifetime of the returned Invoker. config is intentionally
@@ -29,6 +47,12 @@ type config struct {
 	metricsRecorder  telemetry.MetricsRecorder
 	tracerProvider   trace.TracerProvider
 	maxResponseBytes int64
+
+	// opener overrides the production session-opening path. Set
+	// only by the test-only unexported withSessionOpener option;
+	// nil in every production code path, which means [New] uses
+	// the real [openSessions] from new.go.
+	opener sessionOpener
 }
 
 // defaultConfig returns a [config] pre-populated with zero-wiring
