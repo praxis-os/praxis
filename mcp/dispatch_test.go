@@ -61,7 +61,9 @@ func TestInvokeHappyPathEndToEnd(t *testing.T) {
 	if result.Status != tools.ToolStatusSuccess {
 		t.Errorf("status = %q, want %q; ToolResult.Err = %v", result.Status, tools.ToolStatusSuccess, result.Err)
 	}
-	want := "line one\nline two"
+	// D114: text blocks joined with "\n\n" (paragraph break), not
+	// single "\n". See flattenTextContent godoc.
+	want := "line one\n\nline two"
 	if result.Content != want {
 		t.Errorf("Content = %q, want %q", result.Content, want)
 	}
@@ -181,8 +183,10 @@ func TestInvokeDropsNonTextContent(t *testing.T) {
 	if mixed.Status != tools.ToolStatusSuccess {
 		t.Errorf("mixed status = %q, want %q; Err=%v", mixed.Status, tools.ToolStatusSuccess, mixed.Err)
 	}
-	if mixed.Content != "kept\nalso kept" {
-		t.Errorf("mixed Content = %q, want %q", mixed.Content, "kept\nalso kept")
+	// D114: text blocks joined with "\n\n"; the dropped image
+	// block does not introduce an extra separator.
+	if mixed.Content != "kept\n\nalso kept" {
+		t.Errorf("mixed Content = %q, want %q", mixed.Content, "kept\n\nalso kept")
 	}
 
 	// Only-image tool: empty content, still a success.
