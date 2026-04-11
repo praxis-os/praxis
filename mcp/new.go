@@ -522,6 +522,27 @@ func (i *invoker) Invoke(ctx context.Context, _ tools.InvocationContext, call to
 		}, nil
 	}
 
+	// MaxResponseBytes guard (D112 amendment / T33.7). The
+	// adapter-level cap is a resource-consumption guard against a
+	// runaway MCP server that returns gigabytes of tool output.
+	// The check runs before flattenTextContent so the rejection
+	// does not have to allocate the joined string, and the
+	// returned Content is empty — the caller has asked for a hard
+	// cap, so handing back a truncated payload would be worse
+	// than a clean rejection.
+	if cap := i.cfg.maxResponseBytes; cap > 0 {
+		if actual := estimateResponseBytes(result.Content); actual > cap {
+			return tools.ToolResult{
+				Status: tools.ToolStatusError,
+				CallID: call.CallID,
+				Err: praxiserrors.NewToolError(
+					call.Name, call.CallID, praxiserrors.ToolSubKindServerError,
+					fmt.Errorf("mcp: response exceeds MaxResponseBytes: actual=%d cap=%d (D112; see WithMaxResponseBytes)", actual, cap),
+				),
+			}, nil
+		}
+	}
+
 	content := flattenTextContent(result.Content)
 
 	if result.IsError {
@@ -590,6 +611,52 @@ func flattenTextContent(blocks []sdkmcp.Content) string {
 		}
 	}
 	return strings.Join(parts, "\n\n")
+}
+
+// estimateResponseBytes approximates the total byte footprint of
+// the SDK-decoded content slice returned by a successful
+// [sdkmcp.ClientSession.CallTool]. It is the measurement primitive
+// used by the MaxResponseBytes guard (D112 amendment / T33.7).
+//
+// The estimate sums the "large-payload" fields of the three
+// Content variants that can plausibly carry hundreds of KiB to
+// MiB of data:
+//
+//   - [*sdkmcp.TextContent]: the length of the `Text` string in
+//     bytes.
+//   - [*sdkmcp.ImageContent]: the length of the decoded `Data`
+//     byte slice. The SDK delivers the image payload already
+//     base64-decoded into this field, so `len(Data)` is the
+//     authoritative raw-bytes count.
+//   - [*sdkmcp.AudioContent]: same treatment as ImageContent.
+//
+// Resource-link metadata (URIs, names, descriptions) and embedded
+// resource metadata are deliberately NOT counted: they are
+// structurally small (each field is bounded by MCP's own
+// transport limits) and the point of the guard is catching
+// runaway payloads, not micro-accounting every block kind.
+//
+// The estimate is a lower bound: it ignores protocol framing,
+// JSON overhead, and the handful of small metadata fields on
+// each block. The practical effect is that the cap rejects
+// payloads whose "true" byte cost is somewhat higher than the
+// configured cap — always on the safe side of the guard.
+//
+// The function is pure and cheap: it iterates the slice once
+// and does a handful of integer additions. It does not allocate.
+func estimateResponseBytes(blocks []sdkmcp.Content) int64 {
+	var total int64
+	for _, block := range blocks {
+		switch v := block.(type) {
+		case *sdkmcp.TextContent:
+			total += int64(len(v.Text))
+		case *sdkmcp.ImageContent:
+			total += int64(len(v.Data))
+		case *sdkmcp.AudioContent:
+			total += int64(len(v.Data))
+		}
+	}
+	return total
 }
 
 // Definitions returns the composed tool definitions produced at
