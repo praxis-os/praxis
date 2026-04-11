@@ -33,19 +33,21 @@ func withSessionOpener(f sessionOpener) Option {
 	}
 }
 
-// nullSessionOpener is a [sessionOpener] that returns an empty
-// session slice regardless of how many servers are supplied. It
+// nullSessionOpener is a [sessionOpener] that returns a slice of
+// nil [*sdkmcp.ClientSession] pointers, one per input server. It
 // is used by tests that exercise the validation, option-binding,
 // and Close paths but do not need real MCP sessions to assert
 // their invariants.
 //
-// The returned slice is deliberately empty (len=0), not a slice
-// of nil pointers: [closeSessions] iterates over the slice and
-// calls Close on each element, so a nil pointer would panic.
-// Empty-slice semantics match the S30 stub behaviour: Close on
-// an invoker with no open sessions returns nil.
-func nullSessionOpener(_ context.Context, _ config, _ []Server) ([]*sdkmcp.ClientSession, error) {
-	return []*sdkmcp.ClientSession{}, nil
+// The returned slice length matches `len(servers)` so the
+// len-alignment invariant in [buildRouter] holds. The nil entries
+// are tolerated by [buildRouter] (no ListTools call on a nil
+// session), by [closeSessions] (nil entries are skipped), and by
+// [invoker.Invoke] (a nil-session dispatch surfaces as a typed
+// internal-invariant error). Tests that need real sessions use
+// [inMemorySessionOpener] instead.
+func nullSessionOpener(_ context.Context, _ config, servers []Server) ([]*sdkmcp.ClientSession, error) {
+	return make([]*sdkmcp.ClientSession, len(servers)), nil
 }
 
 // inMemorySessionOpener returns a [sessionOpener] that, for each

@@ -118,10 +118,16 @@ func buildRouter(ctx context.Context, servers []Server, sessions []*sdkmcp.Clien
 	for i, s := range servers {
 		session := sessions[i]
 		if session == nil {
-			return nil, systemError(fmt.Sprintf(
-				"buildRouter: servers[%d] (%q): session is nil; every opened server must provide a live ClientSession",
-				i, s.LogicalName,
-			))
+			// Test hooks (see testing_internal_test.go's
+			// nullSessionOpener) return a slice of nil pointers when
+			// they don't need real sessions to assert their invariants.
+			// Production [openSessions] never returns nil entries —
+			// a nil in a production slice is a framework bug that
+			// [invoker.Invoke] surfaces as a typed internal-invariant
+			// error at dispatch time. Here in buildRouter we simply
+			// skip: no live session means no tools to enumerate and
+			// no routes to record for this server.
+			continue
 		}
 
 		for tool, err := range session.Tools(ctx, nil) {

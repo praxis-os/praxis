@@ -4,13 +4,17 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
+	"sync"
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	praxiserrors "github.com/praxis-os/praxis/errors"
+	"github.com/praxis-os/praxis/llm"
 	"github.com/praxis-os/praxis/mcp/internal/client"
 	internaltransport "github.com/praxis-os/praxis/mcp/internal/transport"
 	"github.com/praxis-os/praxis/tools"
@@ -40,6 +44,19 @@ const MaxServers = 32
 // The regex is compiled once at package init so validation is
 // allocation-free on the hot path of [New].
 var logicalNameRegexp = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
+
+// errInvokerClosed is the sentinel-prefix text used by [invoker.Invoke]
+// when a dispatch arrives after [invoker.Close] has already run.
+// Tests match on the stable prefix, so the value is a package-level
+// constant rather than an inlined literal.
+const errInvokerClosed = "mcp: Invoker is closed"
+
+// errUnknownTool is the sentinel-prefix text returned by
+// [invoker.Invoke] when the composed tool name is not present in the
+// routing table. It is returned via ToolResult.Err as an
+// ErrorKindTool/ToolSubKindServerError so the LLM can observe the
+// classification and self-correct.
+const errUnknownTool = "mcp: unknown tool"
 
 // New constructs an [Invoker] that fronts the given MCP servers.
 //
@@ -91,13 +108,20 @@ var logicalNameRegexp = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
 //
 // # Tool-call routing
 //
-// In this build the returned Invoker's [tools.Invoker.Invoke] method
-// is a stub that reports `ErrorKindSystem`: sessions are open but
-// tool-name routing through them (namespacing decode, server
-// lookup, SDK CallTool dispatch) arrives in S32. Early callers can
-// wire the Invoker into their orchestrator to exercise construction,
-// shutdown, credential flow, and error-path classification before
-// S32 lands.
+// After the session-opening stage New walks every open session,
+// enumerates its advertised tools via the SDK iterator
+// `session.Tools`, and builds a routing table (composed name →
+// (session, raw name)) plus a cached [llm.ToolDefinition] slice.
+// The routing table is the single source of truth for
+// [tools.Invoker.Invoke] dispatch; the cached definitions back the
+// [Invoker.Definitions] accessor so callers can thread MCP tool
+// schemas into `llm.Request.Tools` without re-enumerating anything
+// at runtime. Composition follows the D111 rule
+// `{LogicalName}__{mcpToolName}`; collisions across servers are a
+// typed [praxiserrors.SystemError] (not a panic — see Phase 4 D43).
+// A router-construction failure at this stage runs the same
+// partial-openings rollback as an earlier connect failure: every
+// opened session is closed before New returns the error.
 //
 // Stability: stable-v0.x-candidate. The New signature freezes at
 // praxis/mcp v1.0.0.
@@ -131,7 +155,42 @@ func New(ctx context.Context, servers []Server, opts ...Option) (Invoker, error)
 		return nil, err
 	}
 
-	return &invoker{cfg: cfg, servers: pinned, sessions: sessions}, nil
+	rt, err := buildRouter(ctx, pinned, sessions)
+	if err != nil {
+		// A router build failure after sessions are up must run the
+		// same LIFO teardown path as any other partial-openings
+		// failure, otherwise New would leak the eager transports it
+		// just spawned. The rollback result is folded into the
+		// returned error via wrapOpenFailure so callers still see
+		// the offending server index; we use -1 / "" sentinels here
+		// because the router operates on the whole set, not a single
+		// server.
+		rollbackErr := closeSessions(sessions)
+		return nil, wrapRouterFailure(err, rollbackErr)
+	}
+
+	return &invoker{
+		cfg:      cfg,
+		servers:  pinned,
+		sessions: sessions,
+		router:   rt,
+	}, nil
+}
+
+// wrapRouterFailure wraps a buildRouter error with an optional
+// rollback error from closeSessions, using the same
+// joined-error-in-message convention as [wrapOpenFailure]. The
+// buildRouter layer already produces typed SystemError messages
+// that carry the offending server index, so this helper only has
+// to thread rollback context through without duplicating the
+// per-server annotation.
+func wrapRouterFailure(buildErr, rollbackErr error) error {
+	if rollbackErr == nil {
+		return buildErr
+	}
+	return systemError(fmt.Sprintf(
+		"%v; rollback encountered errors: %v", buildErr, rollbackErr,
+	))
 }
 
 // openSessions is the eager session-opening loop called by [New].
@@ -256,11 +315,21 @@ func buildSDKTransport(ctx context.Context, cfg config, s Server) (sdkmcp.Transp
 // actually true at this layer, but a harmless ordering choice
 // that keeps teardown predictable in tests).
 //
+// Nil entries in the slice are tolerated and skipped without
+// touching them — test hooks in `testing_internal_test.go` produce
+// such slices to exercise the Close path without materialising
+// real MCP sessions. Production [openSessions] never returns nil
+// entries.
+//
 // A nil or empty slice returns nil.
 func closeSessions(sessions []*sdkmcp.ClientSession) error {
 	var errs []error
 	for i := len(sessions) - 1; i >= 0; i-- {
-		if err := sessions[i].Close(); err != nil {
+		session := sessions[i]
+		if session == nil {
+			continue
+		}
+		if err := session.Close(); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -288,48 +357,217 @@ func wrapOpenFailure(index int, logicalName string, openErr, rollbackErr error) 
 //
 // Construction (New) populates `sessions` with one live
 // [*sdkmcp.ClientSession] per Server in `servers`; the two slices
-// are index-aligned. [Close] tears every session down in reverse
-// order, aggregating errors via [errors.Join].
+// are index-aligned. `router` is built from those sessions at the
+// same construction step and never mutated afterwards. [Close]
+// tears every session down in reverse order, aggregating errors
+// via [errors.Join], and flips the `closed` flag so subsequent
+// [Invoke] calls fail fast instead of racing with teardown.
 //
-// [Invoke] is still a stub in S31 PR-B: sessions are open but
-// tool-name routing through them arrives in S32.
+// # Concurrency
+//
+// The `mu` mutex guards the `closed` flag and the read path into
+// `sessions` / `router`. [Invoke] takes a read lock so concurrent
+// dispatches proceed in parallel; [Close] takes a write lock and
+// blocks any new Invoke until teardown is done. In-flight Invoke
+// calls observed before Close acquired the write lock are allowed
+// to complete — the SDK serialises or parallelises its own
+// session access per its concurrency contract.
 type invoker struct {
 	cfg      config
 	servers  []Server                // pinned at construction, never mutated after New
 	sessions []*sdkmcp.ClientSession // index-aligned with servers, opened eagerly by New
+	router   *router                 // built eagerly by New, read-only thereafter
+
+	mu     sync.RWMutex
+	closed bool
 }
 
-// errAdapterRoutingNotWired is the sentinel error body used by the
-// S31 PR-B stub [invoker.Invoke] until the tool-name routing layer
-// lands in S32. Exposing it as a file-local const keeps the message
-// consistent and allows tests to match on a stable prefix.
-const errAdapterRoutingNotWired = "mcp: session is open but tool-name routing is not yet wired in this build (S32 stub)"
+// Invoke dispatches a single tool call through one of the MCP
+// sessions owned by this Invoker.
+//
+// The routing flow is:
+//
+//  1. Take a read lock on `mu` and check the `closed` flag — a
+//     post-Close dispatch returns a framework error so broken
+//     orchestrator wiring is surfaced immediately.
+//  2. Look up `call.Name` in the router. A miss is reported
+//     through `ToolResult.Err` as an
+//     `ErrorKindTool/ToolSubKindServerError`, not as a framework
+//     error: unknown-tool is an LLM/configuration concern, not a
+//     broken-invoker signal. The LLM can observe the classification
+//     and self-correct on the next turn.
+//  3. Parse `call.ArgumentsJSON` into a generic `map[string]any`
+//     and hand it to the SDK as `CallToolParams.Arguments`. Empty
+//     or nil ArgumentsJSON becomes a nil `Arguments` value, which
+//     the SDK marshals as omitted per JSON-RPC rules.
+//  4. Invoke [sdkmcp.ClientSession.CallTool]; an SDK error is
+//     returned via `ToolResult.Err` as an
+//     `ErrorKindTool/ToolSubKindServerError` (the full S33 error
+//     taxonomy — network / schema / circuit-open — is introduced
+//     in the S33 commit; this commit lands the minimal placeholder
+//     classification so S32 tests can assert a stable shape).
+//  5. Flatten the `*sdkmcp.TextContent` blocks in the SDK result
+//     into a `\n`-joined string; non-text blocks (image, audio,
+//     resource) are dropped. The empty-content / all-non-text case
+//     yields `Content == ""`, which is still a valid
+//     `ToolStatusSuccess`.
+//  6. If `result.IsError` is set by the server, the flattened
+//     text is returned with `ToolStatusError` and an
+//     `ErrorKindTool/ToolSubKindServerError` wrapper (server-side
+//     tool error), matching the MCP spec's "errors go in the
+//     Content field with IsError=true" contract.
+//
+// The S33 commit replaces steps 4 and 6 with the full content
+// flattening contract (D114) and the 5-bucket error taxonomy
+// (D113). S32 only lands the routing and minimal dispatch so the
+// stub used by early S31 PR-B consumers disappears.
+//
+// A nil framework error is returned in every tool-level case,
+// matching the [tools.Invoker] godoc contract; a non-nil framework
+// error is reserved for "this Invoker is broken and should not be
+// called again" signalling (closed-post-Close above).
+func (i *invoker) Invoke(ctx context.Context, _ tools.InvocationContext, call tools.ToolCall) (tools.ToolResult, error) {
+	i.mu.RLock()
+	closed := i.closed
+	rt := i.router
+	sessions := i.sessions
+	i.mu.RUnlock()
 
-// Invoke is the S31 PR-B stub for the [tools.Invoker] contract.
-//
-// In this build every MCP session owned by the invoker is already
-// open and ready to dispatch tool calls — what is missing is the
-// namespacing-decode layer that would turn an incoming
-// `{LogicalName}__{mcpToolName}` call into a
-// (session, raw mcp tool name) tuple. That layer arrives in S32.
-//
-// The returned [tools.ToolResult] carries [tools.ToolStatusError]
-// and a typed [praxiserrors.SystemError] with
-// [praxiserrors.ErrorKindSystem]. A nil framework error is returned
-// per the [tools.Invoker] godoc contract (framework errors are
-// reserved for broken-invoker signalling; tool-level failures flow
-// through ToolResult.Err).
-//
-// Tests that wire the S31 PR-B Invoker into an orchestrator can
-// observe this stub and classify it deterministically. S32 will
-// replace the body of this method with real dispatch.
-func (i *invoker) Invoke(_ context.Context, _ tools.InvocationContext, call tools.ToolCall) (tools.ToolResult, error) {
+	if closed {
+		return tools.ToolResult{
+			Status: tools.ToolStatusError,
+			CallID: call.CallID,
+			Err:    praxiserrors.NewSystemError(errInvokerClosed, nil),
+		}, praxiserrors.NewSystemError(errInvokerClosed, nil)
+	}
+
+	route, ok := rt.lookup(call.Name)
+	if !ok {
+		return tools.ToolResult{
+			Status: tools.ToolStatusError,
+			CallID: call.CallID,
+			Err: praxiserrors.NewToolError(
+				call.Name, call.CallID, praxiserrors.ToolSubKindServerError,
+				fmt.Errorf("%s %q (leftmost %q-split not present in routing table; see D111)", errUnknownTool, call.Name, logicalNameSeparator),
+			),
+		}, nil
+	}
+
+	if route.sessionIdx < 0 || route.sessionIdx >= len(sessions) {
+		// Defensive: the router built this route from the same
+		// sessions slice, so an out-of-range index would be an
+		// internal bug. Surface it as a framework error so tests
+		// see it deterministically rather than crashing.
+		return tools.ToolResult{
+				Status: tools.ToolStatusError,
+				CallID: call.CallID,
+			}, praxiserrors.NewSystemError(fmt.Sprintf(
+				"mcp: internal routing invariant violated: sessionIdx=%d out of range [0,%d)",
+				route.sessionIdx, len(sessions),
+			), nil)
+	}
+
+	if sessions[route.sessionIdx] == nil {
+		// Production [openSessions] never returns nil entries; a
+		// nil here means a test hook installed a placeholder slice
+		// via [withSessionOpener] + [nullSessionOpener] and then
+		// attempted real dispatch through it. Surface the misuse
+		// as a framework error so the test sees it deterministically.
+		return tools.ToolResult{
+				Status: tools.ToolStatusError,
+				CallID: call.CallID,
+			}, praxiserrors.NewSystemError(fmt.Sprintf(
+				"mcp: internal routing invariant violated: sessions[%d] is nil (test hook misuse?)",
+				route.sessionIdx,
+			), nil)
+	}
+
+	var args any
+	if len(call.ArgumentsJSON) > 0 {
+		var parsed any
+		if err := json.Unmarshal(call.ArgumentsJSON, &parsed); err != nil {
+			return tools.ToolResult{
+				Status: tools.ToolStatusError,
+				CallID: call.CallID,
+				Err: praxiserrors.NewToolError(
+					call.Name, call.CallID, praxiserrors.ToolSubKindSchemaViolation, err,
+				),
+			}, nil
+		}
+		args = parsed
+	}
+
+	session := sessions[route.sessionIdx]
+	result, err := session.CallTool(ctx, &sdkmcp.CallToolParams{
+		Name:      route.rawName,
+		Arguments: args,
+	})
+	if err != nil {
+		return tools.ToolResult{
+			Status: tools.ToolStatusError,
+			CallID: call.CallID,
+			Err: praxiserrors.NewToolError(
+				call.Name, call.CallID, praxiserrors.ToolSubKindServerError, err,
+			),
+		}, nil
+	}
+
+	content := flattenTextContent(result.Content)
+
+	if result.IsError {
+		return tools.ToolResult{
+			Status:  tools.ToolStatusError,
+			Content: content,
+			CallID:  call.CallID,
+			Err: praxiserrors.NewToolError(
+				call.Name, call.CallID, praxiserrors.ToolSubKindServerError,
+				fmt.Errorf("mcp server reported tool error; see ToolResult.Content"),
+			),
+		}, nil
+	}
+
 	return tools.ToolResult{
-		Status:  tools.ToolStatusError,
-		Content: "",
-		Err:     praxiserrors.NewSystemError(errAdapterRoutingNotWired, nil),
+		Status:  tools.ToolStatusSuccess,
+		Content: content,
 		CallID:  call.CallID,
 	}, nil
+}
+
+// flattenTextContent joins every [*sdkmcp.TextContent] block in the
+// SDK result with a `\n` separator, preserving server-side order,
+// and drops every other content variant (image, audio, resource,
+// tool-use, tool-result). An empty or nil slice yields `""`.
+//
+// This is the S32 minimal form of D114 content flattening. S33
+// extends the contract with explicit drop-logging and the
+// documented "empty content is a valid success" guarantee; S32
+// already treats empty content as success by construction, so the
+// S33 diff will be limited to observability hooks and godoc, not
+// control flow.
+func flattenTextContent(blocks []sdkmcp.Content) string {
+	if len(blocks) == 0 {
+		return ""
+	}
+	var parts []string
+	for _, block := range blocks {
+		if tc, ok := block.(*sdkmcp.TextContent); ok {
+			parts = append(parts, tc.Text)
+		}
+	}
+	return strings.Join(parts, "\n")
+}
+
+// Definitions returns the composed tool definitions produced at
+// [New] time by the router. The slice is owned by the Invoker and
+// must not be mutated by the caller; see the [Invoker.Definitions]
+// godoc on the public interface for the stability contract.
+func (i *invoker) Definitions() []llm.ToolDefinition {
+	i.mu.RLock()
+	defer i.mu.RUnlock()
+	if i.router == nil {
+		return nil
+	}
+	return i.router.defs
 }
 
 // Close tears down every MCP session owned by this invoker.
@@ -340,16 +578,29 @@ func (i *invoker) Invoke(_ context.Context, _ tools.InvocationContext, call tool
 // close does not prevent sibling sessions from being closed. If
 // every session closes cleanly, Close returns nil.
 //
-// Close is safe to call more than once: the second call iterates
-// over an already-drained session slice and returns nil. The
-// underlying [sdkmcp.ClientSession.Close] method, per the go-sdk
-// v1.5.0 source, is not documented as idempotent, so this invoker
-// clears its own sessions slice after the first call to guarantee
-// the documented [Invoker] idempotency contract.
+// Close is safe to call more than once: after the first call the
+// `closed` flag is set and subsequent calls return nil without
+// re-draining the session slice. The underlying
+// [sdkmcp.ClientSession.Close] method, per the go-sdk v1.5.0
+// source, is not documented as idempotent, so this invoker clears
+// its own sessions slice after the first call to guarantee the
+// documented [Invoker] idempotency contract.
+//
+// Close also flips the `closed` flag under the write lock so that
+// any post-Close [Invoke] call sees the closed state and returns
+// a framework error immediately rather than racing with teardown.
 func (i *invoker) Close() error {
-	err := closeSessions(i.sessions)
+	i.mu.Lock()
+	if i.closed {
+		i.mu.Unlock()
+		return nil
+	}
+	i.closed = true
+	sessions := i.sessions
 	i.sessions = nil
-	return err
+	i.mu.Unlock()
+
+	return closeSessions(sessions)
 }
 
 // Compile-time interface-satisfaction check. If the invoker struct

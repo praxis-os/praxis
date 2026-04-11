@@ -59,6 +59,37 @@ func assertSystemError(t *testing.T, err error, wantFragments ...string) {
 	}
 }
 
+// assertToolError asserts that err is a typed
+// [*praxiserrors.ToolError] whose Error() string contains every
+// fragment in wantFragments. It fails the current test with
+// Fatalf on the first structural mismatch. Used by the S32 router
+// dispatch tests to check that tool-level failures (unknown tool,
+// server-side tool error) are classified as ErrorKindTool rather
+// than ErrorKindSystem.
+func assertToolError(t *testing.T, err error, wantFragments ...string) {
+	t.Helper()
+	if err == nil {
+		t.Fatal("expected a typed tool error, got nil")
+	}
+	var typed praxiserrors.TypedError
+	if !errors.As(err, &typed) {
+		t.Fatalf("error is not a TypedError: %T: %v", err, err)
+	}
+	if typed.Kind() != praxiserrors.ErrorKindTool {
+		t.Fatalf("error Kind() = %q, want %q", typed.Kind(), praxiserrors.ErrorKindTool)
+	}
+	var toolErr *praxiserrors.ToolError
+	if !errors.As(err, &toolErr) {
+		t.Fatalf("error is not a *ToolError: %T: %v", err, err)
+	}
+	msg := err.Error()
+	for _, frag := range wantFragments {
+		if !strings.Contains(msg, frag) {
+			t.Errorf("error message missing fragment %q; got: %s", frag, msg)
+		}
+	}
+}
+
 // TestNewHappyPath asserts that valid inputs produce a non-nil
 // Invoker, that the returned value satisfies the public Invoker
 // interface shape, and that Close is idempotent on it. Uses
@@ -86,14 +117,15 @@ func TestNewHappyPath(t *testing.T) {
 	}
 }
 
-// TestNewStubInvoke documents the S31 PR-B stub contract: the
-// returned Invoker's Invoke method reports a typed SystemError in
-// ToolResult.Err with the "routing not yet wired" sentinel, while
-// returning a nil framework error. Uses nullSessionOpener so the
-// test does not depend on any real session being open — the
-// Invoke stub in S31 PR-B short-circuits before touching sessions.
-// S32 will replace the stub body and migrate this test.
-func TestNewStubInvoke(t *testing.T) {
+// TestNewInvokeUnknownToolRoutes documents the S32 router-miss
+// contract: a composed tool name not present in the routing table
+// surfaces as ErrorKindTool/ToolSubKindServerError via
+// ToolResult.Err, with a nil framework error. Uses
+// nullSessionOpener because the router is empty anyway (nil
+// sessions yield no tools) — the test asserts the router-miss
+// code path, not session dispatch. The CallID is echoed on
+// the ToolResult.
+func TestNewInvokeUnknownToolRoutes(t *testing.T) {
 	t.Parallel()
 
 	inv, err := New(context.Background(), []Server{validServer("probe")}, withSessionOpener(nullSessionOpener))
@@ -107,7 +139,7 @@ func TestNewStubInvoke(t *testing.T) {
 		Name:   "probe__anything",
 	})
 	if frameworkErr != nil {
-		t.Fatalf("Invoke framework error: got %v, want nil (stub routes failures via ToolResult.Err)", frameworkErr)
+		t.Fatalf("Invoke framework error: got %v, want nil (router miss routes via ToolResult.Err)", frameworkErr)
 	}
 	if result.Status != tools.ToolStatusError {
 		t.Errorf("Invoke status = %q, want %q", result.Status, tools.ToolStatusError)
@@ -116,9 +148,9 @@ func TestNewStubInvoke(t *testing.T) {
 		t.Errorf("Invoke CallID = %q, want %q", result.CallID, "call-1")
 	}
 	if result.Err == nil {
-		t.Fatal("Invoke ToolResult.Err is nil; stub must route failures via ToolResult.Err")
+		t.Fatal("Invoke ToolResult.Err is nil; router miss must route failures via ToolResult.Err")
 	}
-	assertSystemError(t, result.Err, "routing is not yet wired")
+	assertToolError(t, result.Err, "unknown tool", "probe__anything")
 }
 
 // TestNewServerListPinned asserts T30.4's "server list is pinned for

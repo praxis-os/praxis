@@ -14,18 +14,23 @@ import (
 )
 
 // TestNewOpensInMemorySession exercises the full session-opening
-// pipeline through [inMemorySessionOpener]. This is the PR-B
-// white-box counterpart to S30's construction-only tests: it
-// drives real [*sdkmcp.ClientSession] values through the New →
-// Close lifecycle, proving that:
+// pipeline through [inMemorySessionOpener]. It drives real
+// [*sdkmcp.ClientSession] values through the New → Close
+// lifecycle, proving that:
 //
 //  1. New opens one session per server and stores them in the
 //     returned invoker's session slice.
-//  2. Close iterates those sessions in reverse order and returns
-//     nil on a clean teardown.
-//  3. A second Close call is idempotent (returns nil).
-//  4. The Invoke stub still produces its S31 PR-B sentinel error
-//     even when a real session is open — routing arrives in S32.
+//  2. The S32 router is built against those real sessions and the
+//     returned invoker advertises an empty definitions slice
+//     (the bare inMemorySessionOpener does not register any tools
+//     on its embedded server — dedicated router tests set up
+//     tool-bearing servers separately).
+//  3. Invoke on an unknown composed tool name routes through the
+//     router miss path and returns an ErrorKindTool/ServerError,
+//     not a framework error.
+//  4. Close tears every session down in reverse order and returns
+//     nil on clean teardown.
+//  5. A second Close call is idempotent (returns nil).
 func TestNewOpensInMemorySession(t *testing.T) {
 	t.Parallel()
 
@@ -52,9 +57,15 @@ func TestNewOpensInMemorySession(t *testing.T) {
 		}
 	}
 
-	// S31 PR-B stub: Invoke still reports the "routing not yet
-	// wired" sentinel even with a live session attached. S32
-	// will flip this test to the real dispatch path.
+	// The bare inMemorySessionOpener connects empty servers, so
+	// the router should advertise zero tool definitions.
+	if defs := inv.Definitions(); len(defs) != 0 {
+		t.Errorf("Definitions() on empty servers returned %d entries, want 0", len(defs))
+	}
+
+	// Dispatching an unknown composed name must route through the
+	// router-miss path: ToolResult.Err carries an ErrorKindTool
+	// with ServerSubKind, and no framework error is returned.
 	result, frameworkErr := inv.Invoke(ctx, tools.InvocationContext{}, tools.ToolCall{
 		CallID: "c1",
 		Name:   "alpha__probe",
@@ -66,9 +77,12 @@ func TestNewOpensInMemorySession(t *testing.T) {
 		t.Errorf("Invoke status = %q, want %q", result.Status, tools.ToolStatusError)
 	}
 	if result.Err == nil {
-		t.Fatal("Invoke ToolResult.Err is nil; stub must route through Err")
+		t.Fatal("Invoke ToolResult.Err is nil; router miss must route through Err")
 	}
-	assertSystemError(t, result.Err, "routing is not yet wired")
+	// The assertion delegates the shape check to assertToolError
+	// to avoid duplicating the error-taxonomy plumbing across
+	// tests. The helper lives in new_test.go.
+	assertToolError(t, result.Err, "unknown tool")
 
 	// Close tears every session down. Second call is idempotent.
 	if err := inv.Close(); err != nil {
