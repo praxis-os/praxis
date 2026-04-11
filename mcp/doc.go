@@ -95,6 +95,58 @@
 // wire MCP Invokers alongside core invokers must account for this
 // combination in their filter logic.
 //
+// # Known limitation OI-MCP-1: residual credential bytes in Go strings
+//
+// The adapter enforces the Phase 5 D67 zero-on-close contract on
+// every byte slice it owns that has ever held credential material:
+// after a credential is delivered to an MCP session, the adapter
+// calls [credentials.ZeroBytes] on its copy and calls
+// [credentials.Credential.Close] on the Resolver-owned copy.
+//
+// There is one place where this zeroing contract cannot be
+// enforced, by design of the Go language itself: the Go string
+// value that the adapter hands to the SDK for stdio env variables
+// and for HTTP `Authorization: Bearer` headers.
+//
+// The stdio path, in particular, must assign the credential
+// material into [os/exec.Cmd.Env], which is a `[]string`. The
+// assignment requires a `string(credentialBytes)` conversion, and
+// Go strings are immutable — once the conversion has happened, the
+// adapter cannot zero the bytes the string points at. The string
+// lives in the Go runtime heap until the next garbage collection
+// pass collects it, which is typically within a few seconds of the
+// adapter dropping its last reference but is not observable from
+// praxis code.
+//
+// The HTTP path has the same shape: the bearer token appears as
+// the value in an [net/http.Header] map, which is also a
+// `[]string`. The adapter's round-tripper holds the token only for
+// the lifetime of the session, but a residual copy of the string
+// lives in the heap until GC.
+//
+// **OI-MCP-1 is the stable identifier for this residual risk.** It
+// is documented here rather than hidden because Phase 7 §4.2 and
+// §4.3 explicitly call out this boundary as a known imperfect
+// zeroing point that v1.0.0 accepts. The adapter's mitigation is to
+// minimise the lifetime of credential strings: the `[]byte` source
+// buffer is zeroed immediately after the string conversion, so the
+// string is the only place the material exists in praxis process
+// memory; the SDK's session teardown releases its own internal
+// references; and a short GC cycle afterwards collects the
+// residual string.
+//
+// Callers deploying praxis/mcp in environments where even a
+// GC-bounded residual credential copy in Go heap is unacceptable
+// MUST either avoid using credentialed MCP servers entirely or
+// build their own adapter with a cgo-backed secret-memory allocator
+// that bypasses Go's string semantics. No such allocator ships in
+// v1.0.0.
+//
+// The full residual-risk discussion lives in Phase 7
+// `docs/phase-7-mcp-integration/04-security-and-credentials.md §6`
+// and the adapter-level zeroing implementation lives in
+// `mcp/internal/transport/credentials.go`.
+//
 // # Phase 7 scope (D106–D121)
 //
 //   - Transports: stdio and Streamable HTTP (D108).
