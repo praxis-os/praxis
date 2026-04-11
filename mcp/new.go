@@ -523,21 +523,21 @@ func (i *invoker) Invoke(ctx context.Context, _ tools.InvocationContext, call to
 	}
 
 	// MaxResponseBytes guard (D112 amendment / T33.7). The
-	// adapter-level cap is a resource-consumption guard against a
-	// runaway MCP server that returns gigabytes of tool output.
+	// adapter-level limit is a resource-consumption guard against
+	// a runaway MCP server that returns gigabytes of tool output.
 	// The check runs before flattenTextContent so the rejection
 	// does not have to allocate the joined string, and the
 	// returned Content is empty — the caller has asked for a hard
 	// cap, so handing back a truncated payload would be worse
 	// than a clean rejection.
-	if cap := i.cfg.maxResponseBytes; cap > 0 {
-		if actual := estimateResponseBytes(result.Content); actual > cap {
+	if maxBytes := i.cfg.maxResponseBytes; maxBytes > 0 {
+		if actual := estimateResponseBytes(result.Content); actual > maxBytes {
 			return tools.ToolResult{
 				Status: tools.ToolStatusError,
 				CallID: call.CallID,
 				Err: praxiserrors.NewToolError(
 					call.Name, call.CallID, praxiserrors.ToolSubKindServerError,
-					fmt.Errorf("mcp: response exceeds MaxResponseBytes: actual=%d cap=%d (D112; see WithMaxResponseBytes)", actual, cap),
+					fmt.Errorf("mcp: response exceeds MaxResponseBytes: actual=%d cap=%d (D112; see WithMaxResponseBytes)", actual, maxBytes),
 				),
 			}, nil
 		}
