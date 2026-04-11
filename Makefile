@@ -2,17 +2,23 @@
 
 .PHONY: test lint bench cover check banned-grep spdx-check fmt vet
 
+# Module paths that make targets operate on. Resolved through go.work so
+# both the core module (.) and the praxis/mcp sub-module are exercised by
+# every CI target. Add new sub-modules here when they ship (e.g.
+# `./skills/...` in v0.9.0).
+MODULE_PATHS := ./... ./mcp/...
+
 # Run all tests with race detection
 test:
-	go test -race -count=1 ./...
+	go test -race -count=1 $(MODULE_PATHS)
 
 # Run golangci-lint
 lint:
-	golangci-lint run ./...
+	golangci-lint run $(MODULE_PATHS)
 
 # Run go vet
 vet:
-	go vet ./...
+	go vet $(MODULE_PATHS)
 
 # Run gofmt check (fails if any files need formatting)
 fmt:
@@ -24,11 +30,11 @@ fmt:
 
 # Run benchmarks
 bench:
-	go test -bench=. -benchmem -count=5 ./...
+	go test -bench=. -benchmem -count=5 $(MODULE_PATHS)
 
 # Generate coverage report (excludes examples/, matches CI threshold)
 cover:
-	go test -race -coverprofile=coverage.out $$(go list ./... | grep -v /examples/)
+	go test -race -coverprofile=coverage.out $$(go list $(MODULE_PATHS) | grep -v /examples/)
 	go tool cover -func=coverage.out
 
 # Check for banned identifiers (decoupling contract enforcement)
