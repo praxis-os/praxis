@@ -268,6 +268,101 @@ surface-area expansion that does not carry its weight for v1.0.
 `{LogicalName}__{mcpToolName}`, fixed at the adapter level, not
 caller-configurable in v1.0.0.
 
+### 3.4 Routing table construction at `New` time
+
+After every server's session has been opened (see §2), the adapter
+walks each live session, enumerates its advertised tools, and builds
+an internal routing table. The table is the single source of truth
+for `Invoker.Invoke` dispatch and for the public `Definitions()`
+method the adapter exposes for `llm.Request.Tools` wiring.
+
+**Algorithm.** For each `(serverIdx, session)` pair:
+
+1. The adapter calls `session.Tools(ctx, nil)` (paginated, backed by
+   the SDK iterator form of `ListTools`) and drains the iterator into
+   a local slice of `*sdkmcp.Tool` values. Errors from the iterator
+   are wrapped as typed `ErrorKindSystem` construction failures and
+   propagate through `New`, triggering the partial-openings rollback
+   path from §2.
+2. For each advertised tool `t`, the adapter composes the public name
+   `composed := s.LogicalName + "__" + t.Name` (D111).
+3. If `composed` is already present in the routing table, the
+   adapter aborts construction and returns a typed
+   `ErrorKindSystem` whose message names **both** servers
+   (`LogicalName` and index) and the conflicting composed tool name.
+   The original sessions are closed through the same rollback path
+   as §2. No partial `Invoker` is returned.
+4. Otherwise the adapter records
+   `routes[composed] = {sessionIdx: serverIdx, rawName: t.Name}` and
+   appends a single `llm.ToolDefinition{Name: composed, Description:
+   t.Description, InputSchema: <JSON-marshalled schema>}` to the
+   cached definitions slice.
+
+The `InputSchema` field carries the server-advertised JSON Schema
+object after a single `json.Marshal` pass. The adapter never
+interprets the schema; the SDK delivers it as `map[string]any` from
+the client side (`Tool.InputSchema` godoc, `go-sdk@v1.5.0`).
+
+**Collision form.** Under the D111 `LogicalName` rules
+(`^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$`, no `__`), two configured
+servers can only produce the same composed name if they both
+declare the same `LogicalName` (which is already rejected at
+`validateServers` time by a stricter rule) **or** if the
+pathological "server-defined tool name contains `__`" case
+interacts with leftmost-split dispatch. The collision-detection
+pass above catches both cases defensively: it is an invariant
+check that would fail safe rather than a practical error path for
+well-formed deployments.
+
+**Why typed error, not panic.** The `03-integration-model.md` text
+in T32.2's jira form uses the word "panic" colloquially. The
+realised behaviour is a typed `ErrorKindSystem` return through
+`New`, matching the rest of the adapter's construction-error
+posture (Phase 4 D43 "no panic across the public API"). The
+diagnostic content — names both servers and the conflicting tool —
+is identical to what the panic text would carry.
+
+**Definitions lifetime.** The definitions slice is built once at
+`New` and returned by reference from `Invoker.Definitions()`. Its
+contents are frozen for the Invoker's lifetime. Tool lists can
+only change by re-constructing the `Invoker`, which matches the
+D110 "construction-time binding, no runtime registration"
+posture.
+
+### 3.5 `Invoker.Definitions()` — the second public method on `mcp.Invoker`
+
+Phase 3's `tools.Invoker` (frozen-v1.0) carries only `Invoke` —
+tool schemas are provided to the LLM via `llm.Request.Tools`, not
+through the invoker surface. The MCP adapter therefore needs a
+second method to bridge the gap between "what the MCP servers
+advertise at handshake" and "what the caller passes into
+`llm.Request.Tools`". That method is:
+
+```go
+// Definitions returns the composed tool definitions discovered at
+// New time, ready for llm.Request.Tools. Names are composed as
+// {LogicalName}__{mcpToolName} per D111.
+//
+// The returned slice is owned by the Invoker and must not be
+// mutated by the caller. Its contents are frozen for the
+// Invoker's lifetime.
+//
+// Stability: stable-v0.x-candidate; the Invoker interface freezes
+// at praxis/mcp v1.0.0.
+Definitions() []llm.ToolDefinition
+```
+
+Adding this method expands the `mcp.Invoker` interface surface by
+one method, which is permitted between v0.7.0 and the sub-module's
+v1.0.0 freeze per the stability notes on `mcp/invoker.go`. The
+concrete field referenced here is the definitions slice built at
+step 4 of §3.4 above.
+
+The import of `github.com/praxis-os/praxis/llm` this introduces is
+the adapter's second core dependency (the first was `tools`). Both
+are pure-type packages and do not pull runtime state into the
+sub-module.
+
 ## 4. Budget participation (D112)
 
 MCP-backed tool calls participate in `budget.Guard` identically to any

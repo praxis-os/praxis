@@ -692,6 +692,61 @@ error, triggering the circuit-open cool-down; the next call
 re-fetches. v1.x may add explicit refresh support via an optional
 interface.
 
+**Accepted deviation from D117 §1–§2 (amendment 2026-04-11):**
+§1–§2 above state that credential fetch happens on the **first
+`Invoke` call** to each server, not at `New` time. The realised
+v0.7.0 implementation fetches credentials **at `New` time**
+inside the eager session-opening loop described in
+`03-integration-model.md §2` (`New opens each server's transport
+eagerly (stdio: spawns the child process; HTTP: negotiates
+capabilities via handshake)`). Two facts drove the deviation:
+
+1. **Eager opening was already committed in the integration
+   model.** §2 of `03-integration-model.md` predates D117 and
+   commits to partial-failure cleanup semantics that only make
+   sense if every session is opened before `New` returns. A
+   lazy-per-first-Invoke design would have required rewriting §2
+   and invalidating the test-harness shape that S31 PR-B merged.
+2. **T32.2 collision detection requires `session.ListTools` at
+   `New` time.** Detecting composed-name collisions before the
+   first `Invoke` — the contract that gives `New` its fail-fast
+   value — requires an open session per server, which requires a
+   resolved credential per credentialed server. The "first Invoke
+   fetch" form is incompatible with the fail-fast contract.
+
+The realised flow preserves every Phase 5 credential-lifecycle
+structural invariant that matters:
+
+- `Resolver.Fetch` still runs exactly once per server per
+  `Invoker` lifetime.
+- `Credential.Close` still runs **immediately** after the
+  credential material has been copied into the transport
+  (`mcp/internal/transport.InjectEnvCredential` for stdio,
+  `mcp/internal/transport.BuildHTTPTransport` for HTTP); the
+  resolver-owned buffer is zeroed before `New` proceeds to the
+  next server.
+- The adapter-owned copy is zeroed inside the transport builder
+  after the Go string that the SDK needs has been materialised
+  (OI-MCP-1 residual risk remains per `mcp/doc.go`).
+- `New` returns with no live `Credential` handle anywhere in the
+  adapter.
+
+What moves is the **timing**: the fetch happens during `New`
+rather than during the first `Invoke`. The adapter does **not**
+hold a `Credential` handle between `New` and the first `Invoke`,
+so the original Phase 5 "short-lived credential handle" posture
+is preserved: the handle lifetime is bounded by a single
+synchronous helper call inside `openSessions`, which is a
+stricter bound than "one tool-call goroutine" (the original
+D117 §2 bound).
+
+The deviation is recorded here and classified at the same
+"acceptable risk" tier as the Phase 5 §3.2 breach documented
+above. Consumers with stricter posture requirements use
+short-lived credentials or KMS-backed proxy tokens; nothing in
+this amendment changes the D117 §3–§4 session-reuse and
+tear-down semantics.
+
 ---
 
 ## D118 — `SignedIdentity` propagation policy

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/praxis-os/praxis/llm"
 	"github.com/praxis-os/praxis/tools"
 )
 
@@ -29,6 +30,15 @@ func (f *fakeInvoker) Invoke(_ context.Context, _ tools.InvocationContext, call 
 
 func (f *fakeInvoker) Close() error {
 	f.closed = true
+	return nil
+}
+
+// Definitions satisfies the S32 Invoker.Definitions() contract. The
+// fake advertises no tools — the compile-time assertion below only
+// cares that the method exists with the correct signature; the
+// behavioural test for Definitions lives in the router/new test
+// suite that exercises the real adapter.
+func (f *fakeInvoker) Definitions() []llm.ToolDefinition {
 	return nil
 }
 

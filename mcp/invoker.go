@@ -5,6 +5,7 @@ package mcp
 import (
 	"io"
 
+	"github.com/praxis-os/praxis/llm"
 	"github.com/praxis-os/praxis/tools"
 )
 
@@ -59,4 +60,28 @@ type Invoker interface {
 
 	// io.Closer: tears down every MCP session owned by this Invoker.
 	io.Closer
+
+	// Definitions returns the composed tool definitions discovered
+	// at [New] time, ready to be threaded into `llm.Request.Tools`
+	// when the caller assembles an LLM request. Names are composed
+	// as `{LogicalName}__{mcpToolName}` per D111; the slice is
+	// sorted by composed name for deterministic LLM fixtures.
+	//
+	// The returned slice is owned by the Invoker and must not be
+	// mutated by the caller. Its contents are frozen for the
+	// Invoker's lifetime — MCP tool lists can only change by
+	// re-constructing the Invoker, which matches the D110
+	// "construction-time binding, no runtime registration" posture.
+	//
+	// Definitions is the only way a caller discovers which MCP
+	// tools the adapter fronts: the core [tools.Invoker] surface
+	// does not carry schema information, so this method is the
+	// bridge between server-advertised MCP schemas and the
+	// [llm.ToolDefinition] shape the LLM provider expects. See
+	// `docs/phase-7-mcp-integration/03-integration-model.md §3.5`
+	// for the rationale.
+	//
+	// Stability: stable-v0.x-candidate. The method freezes at
+	// praxis/mcp v1.0.0.
+	Definitions() []llm.ToolDefinition
 }
