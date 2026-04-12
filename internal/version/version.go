@@ -4,4 +4,4 @@ package version
 
 // Version is the current release version of praxis.
 // This value is updated automatically by release-please.
-const Version = "0.5.0" // x-release-please-version
+const Version = "0.7.0" // x-release-please-version
