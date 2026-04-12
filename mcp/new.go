@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -169,11 +170,22 @@ func New(ctx context.Context, servers []Server, opts ...Option) (Invoker, error)
 		return nil, wrapRouterFailure(err, rollbackErr)
 	}
 
+	// D115 type-assertion: if the caller-supplied
+	// telemetry.MetricsRecorder also satisfies our
+	// MCPMetricsRecorder extension, store it so Invoke can emit
+	// MCP-specific metrics. If the assertion fails, mcpRecorder
+	// stays nil and every emission call site is a no-op.
+	var mcpRecorder MCPMetricsRecorder
+	if mr, ok := cfg.metricsRecorder.(MCPMetricsRecorder); ok {
+		mcpRecorder = mr
+	}
+
 	return &invoker{
-		cfg:      cfg,
-		servers:  pinned,
-		sessions: sessions,
-		router:   rt,
+		cfg:         cfg,
+		servers:     pinned,
+		sessions:    sessions,
+		router:      rt,
+		mcpRecorder: mcpRecorder,
 	}, nil
 }
 
@@ -373,10 +385,11 @@ func wrapOpenFailure(index int, logicalName string, openErr, rollbackErr error) 
 // to complete — the SDK serialises or parallelises its own
 // session access per its concurrency contract.
 type invoker struct {
-	cfg      config
-	servers  []Server                // pinned at construction, never mutated after New
-	sessions []*sdkmcp.ClientSession // index-aligned with servers, opened eagerly by New
-	router   *router                 // built eagerly by New, read-only thereafter
+	cfg         config
+	servers     []Server                // pinned at construction, never mutated after New
+	sessions    []*sdkmcp.ClientSession // index-aligned with servers, opened eagerly by New
+	router      *router                 // built eagerly by New, read-only thereafter
+	mcpRecorder MCPMetricsRecorder      // nil when the caller's recorder does not implement the extension (D115)
 
 	mu     sync.RWMutex
 	closed bool
@@ -499,10 +512,16 @@ func (i *invoker) Invoke(ctx context.Context, _ tools.InvocationContext, call to
 	}
 
 	session := sessions[route.sessionIdx]
+	server := i.servers[route.sessionIdx]
+	tLabel := transportLabel(server)
+
+	start := time.Now()
 	result, err := session.CallTool(ctx, &sdkmcp.CallToolParams{
 		Name:      route.rawName,
 		Arguments: args,
 	})
+	elapsed := time.Since(start)
+
 	if err != nil {
 		// Translate the SDK-returned error into the praxis error
 		// taxonomy. classifyCallToolError implements the D113
@@ -513,6 +532,19 @@ func (i *invoker) Invoke(ctx context.Context, _ tools.InvocationContext, call to
 		// "JSON-RPC protocol / server-defined codes → ServerError"
 		// uniform rule.
 		subKind := classifyCallToolError(err)
+
+		// D115 metrics: record the errored call + the transport
+		// error separately so operators can alert on per-server
+		// transport failure rate independently.
+		i.recordMCPCall(server.LogicalName, tLabel, "error", elapsed)
+		if subKind != praxiserrors.ToolSubKindServerError {
+			// Transport-originated errors (Network, CircuitOpen,
+			// SchemaViolation) get a transport-error counter bump;
+			// ServerError is a tool-/protocol-level error already
+			// counted via the calls_total metric.
+			i.recordMCPTransportError(server.LogicalName, tLabel, string(subKind))
+		}
+
 		return tools.ToolResult{
 			Status: tools.ToolStatusError,
 			CallID: call.CallID,
@@ -532,6 +564,7 @@ func (i *invoker) Invoke(ctx context.Context, _ tools.InvocationContext, call to
 	// than a clean rejection.
 	if maxBytes := i.cfg.maxResponseBytes; maxBytes > 0 {
 		if actual := estimateResponseBytes(result.Content); actual > maxBytes {
+			i.recordMCPCall(server.LogicalName, tLabel, "error", elapsed)
 			return tools.ToolResult{
 				Status: tools.ToolStatusError,
 				CallID: call.CallID,
@@ -553,6 +586,7 @@ func (i *invoker) Invoke(ctx context.Context, _ tools.InvocationContext, call to
 		// can still inspect the response payload (often the
 		// server-side error message, per the MCP spec's "errors
 		// go in the Content field with IsError=true" contract).
+		i.recordMCPCall(server.LogicalName, tLabel, "error", elapsed)
 		return tools.ToolResult{
 			Status:  tools.ToolStatusError,
 			Content: content,
@@ -564,11 +598,31 @@ func (i *invoker) Invoke(ctx context.Context, _ tools.InvocationContext, call to
 		}, nil
 	}
 
+	i.recordMCPCall(server.LogicalName, tLabel, "ok", elapsed)
 	return tools.ToolResult{
 		Status:  tools.ToolStatusSuccess,
 		Content: content,
 		CallID:  call.CallID,
 	}, nil
+}
+
+// recordMCPCall is a nil-safe wrapper around
+// [MCPMetricsRecorder.RecordMCPCall]. It is a method on invoker
+// so every emission site reads as `i.recordMCPCall(...)` and the
+// nil-check is centralised here rather than duplicated at every
+// call site.
+func (i *invoker) recordMCPCall(server, transport, status string, d time.Duration) {
+	if i.mcpRecorder != nil {
+		i.mcpRecorder.RecordMCPCall(server, transport, status, d)
+	}
+}
+
+// recordMCPTransportError is a nil-safe wrapper around
+// [MCPMetricsRecorder.RecordMCPTransportError].
+func (i *invoker) recordMCPTransportError(server, transport, kind string) {
+	if i.mcpRecorder != nil {
+		i.mcpRecorder.RecordMCPTransportError(server, transport, kind)
+	}
 }
 
 // flattenTextContent joins every [*sdkmcp.TextContent] block in
