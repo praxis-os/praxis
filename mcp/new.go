@@ -399,28 +399,29 @@ type invoker struct {
 //  3. Parse `call.ArgumentsJSON` into a generic `map[string]any`
 //     and hand it to the SDK as `CallToolParams.Arguments`. Empty
 //     or nil ArgumentsJSON becomes a nil `Arguments` value, which
-//     the SDK marshals as omitted per JSON-RPC rules.
+//     the SDK marshals as omitted per JSON-RPC rules. A malformed
+//     ArgumentsJSON yields `ToolSubKindSchemaViolation`.
 //  4. Invoke [sdkmcp.ClientSession.CallTool]; an SDK error is
-//     returned via `ToolResult.Err` as an
-//     `ErrorKindTool/ToolSubKindServerError` (the full S33 error
-//     taxonomy — network / schema / circuit-open — is introduced
-//     in the S33 commit; this commit lands the minimal placeholder
-//     classification so S32 tests can assert a stable shape).
+//     routed through [classifyCallToolError] (D113 translation
+//     table) which maps it to one of
+//     `Network` / `CircuitOpen` / `SchemaViolation` / `ServerError`
+//     per the mid-session classification rules. The full branch
+//     list lives on [classifyCallToolError] godoc; handshake
+//     failures never reach Invoke because they surface at
+//     construction time through [openSessions].
 //  5. Flatten the `*sdkmcp.TextContent` blocks in the SDK result
-//     into a `\n`-joined string; non-text blocks (image, audio,
-//     resource) are dropped. The empty-content / all-non-text case
-//     yields `Content == ""`, which is still a valid
-//     `ToolStatusSuccess`.
+//     with [flattenTextContent]: text blocks joined with `\n\n`
+//     per D114, non-text blocks (image, audio, resource) silently
+//     dropped. The empty-content / all-non-text case yields
+//     `Content == ""`, which is still a valid `ToolStatusSuccess`
+//     per the D114 amendment 2026-04-10 contract note for
+//     PostToolFilter implementors.
 //  6. If `result.IsError` is set by the server, the flattened
 //     text is returned with `ToolStatusError` and an
 //     `ErrorKindTool/ToolSubKindServerError` wrapper (server-side
 //     tool error), matching the MCP spec's "errors go in the
-//     Content field with IsError=true" contract.
-//
-// The S33 commit replaces steps 4 and 6 with the full content
-// flattening contract (D114) and the 5-bucket error taxonomy
-// (D113). S32 only lands the routing and minimal dispatch so the
-// stub used by early S31 PR-B consumers disappears.
+//     Content field with IsError=true" contract and D113's
+//     `isError: true` row.
 //
 // A nil framework error is returned in every tool-level case,
 // matching the [tools.Invoker] godoc contract; a non-nil framework
@@ -503,18 +504,55 @@ func (i *invoker) Invoke(ctx context.Context, _ tools.InvocationContext, call to
 		Arguments: args,
 	})
 	if err != nil {
+		// Translate the SDK-returned error into the praxis error
+		// taxonomy. classifyCallToolError implements the D113
+		// mapping table: SDK transport sentinels become Network,
+		// session-gone becomes CircuitOpen, HTTP 401/403 become
+		// CircuitOpen, 429 becomes Network, and so on. Every
+		// unclassified error collapses to ServerError per D113's
+		// "JSON-RPC protocol / server-defined codes → ServerError"
+		// uniform rule.
+		subKind := classifyCallToolError(err)
 		return tools.ToolResult{
 			Status: tools.ToolStatusError,
 			CallID: call.CallID,
 			Err: praxiserrors.NewToolError(
-				call.Name, call.CallID, praxiserrors.ToolSubKindServerError, err,
+				call.Name, call.CallID, subKind, err,
 			),
 		}, nil
+	}
+
+	// MaxResponseBytes guard (D112 amendment / T33.7). The
+	// adapter-level limit is a resource-consumption guard against
+	// a runaway MCP server that returns gigabytes of tool output.
+	// The check runs before flattenTextContent so the rejection
+	// does not have to allocate the joined string, and the
+	// returned Content is empty — the caller has asked for a hard
+	// cap, so handing back a truncated payload would be worse
+	// than a clean rejection.
+	if maxBytes := i.cfg.maxResponseBytes; maxBytes > 0 {
+		if actual := estimateResponseBytes(result.Content); actual > maxBytes {
+			return tools.ToolResult{
+				Status: tools.ToolStatusError,
+				CallID: call.CallID,
+				Err: praxiserrors.NewToolError(
+					call.Name, call.CallID, praxiserrors.ToolSubKindServerError,
+					fmt.Errorf("mcp: response exceeds MaxResponseBytes: actual=%d cap=%d (D112; see WithMaxResponseBytes)", actual, maxBytes),
+				),
+			}, nil
+		}
 	}
 
 	content := flattenTextContent(result.Content)
 
 	if result.IsError {
+		// Per D113, an MCP tool result with IsError=true is a
+		// server-reported tool-level failure. Phase 7 maps it to
+		// ErrorKindTool + ToolSubKindServerError and preserves
+		// the flattened text content so PostToolFilter implementors
+		// can still inspect the response payload (often the
+		// server-side error message, per the MCP spec's "errors
+		// go in the Content field with IsError=true" contract).
 		return tools.ToolResult{
 			Status:  tools.ToolStatusError,
 			Content: content,
@@ -533,17 +571,35 @@ func (i *invoker) Invoke(ctx context.Context, _ tools.InvocationContext, call to
 	}, nil
 }
 
-// flattenTextContent joins every [*sdkmcp.TextContent] block in the
-// SDK result with a `\n` separator, preserving server-side order,
-// and drops every other content variant (image, audio, resource,
-// tool-use, tool-result). An empty or nil slice yields `""`.
+// flattenTextContent joins every [*sdkmcp.TextContent] block in
+// the SDK result with a `\n\n` separator, preserving server-side
+// order, and drops every other content variant (image, audio,
+// resource, tool-use, tool-result). An empty or nil slice — or a
+// slice that contains only non-text blocks — yields `""`.
 //
-// This is the S32 minimal form of D114 content flattening. S33
-// extends the contract with explicit drop-logging and the
-// documented "empty content is a valid success" guarantee; S32
-// already treats empty content as success by construction, so the
-// S33 diff will be limited to observability hooks and godoc, not
-// control flow.
+// This is the adapter's implementation of D114. Design points:
+//
+//   - The separator is a **double newline** (`\n\n`), not a single
+//     `\n`. Double newlines read as paragraph breaks in the LLM
+//     prompt context, which preserves the server-side block
+//     boundaries without forcing the LLM to infer them from a
+//     wall of text. The jira task T33.1 description uses `\n`
+//     colloquially; D114 is the authoritative source for the
+//     exact separator.
+//   - Non-text blocks are **silently dropped**. Phase 7 rejects
+//     encoding images or audio as text at the adapter boundary
+//     (D114 §rationale); callers who need access to non-text
+//     blocks must implement their own `tools.Invoker` wrapper.
+//   - A `Content` slice of zero text blocks yields the empty
+//     string. Per D114 §amendment 2026-04-10, the combination
+//     `Status == ToolStatusSuccess && Content == ""` is a
+//     **valid** outcome that Phase 3 `PostToolFilter`
+//     implementors must not treat as a denial or framework bug.
+//     The adapter's invoker godoc and the `flattenTextContent`
+//     call site both rely on this invariant.
+//   - Server-side order is preserved. Two separate `TextContent`
+//     blocks appear in the flattened output in the same order
+//     they arrived on the wire, separated by the `\n\n` joiner.
 func flattenTextContent(blocks []sdkmcp.Content) string {
 	if len(blocks) == 0 {
 		return ""
@@ -554,7 +610,53 @@ func flattenTextContent(blocks []sdkmcp.Content) string {
 			parts = append(parts, tc.Text)
 		}
 	}
-	return strings.Join(parts, "\n")
+	return strings.Join(parts, "\n\n")
+}
+
+// estimateResponseBytes approximates the total byte footprint of
+// the SDK-decoded content slice returned by a successful
+// [sdkmcp.ClientSession.CallTool]. It is the measurement primitive
+// used by the MaxResponseBytes guard (D112 amendment / T33.7).
+//
+// The estimate sums the "large-payload" fields of the three
+// Content variants that can plausibly carry hundreds of KiB to
+// MiB of data:
+//
+//   - [*sdkmcp.TextContent]: the length of the `Text` string in
+//     bytes.
+//   - [*sdkmcp.ImageContent]: the length of the decoded `Data`
+//     byte slice. The SDK delivers the image payload already
+//     base64-decoded into this field, so `len(Data)` is the
+//     authoritative raw-bytes count.
+//   - [*sdkmcp.AudioContent]: same treatment as ImageContent.
+//
+// Resource-link metadata (URIs, names, descriptions) and embedded
+// resource metadata are deliberately NOT counted: they are
+// structurally small (each field is bounded by MCP's own
+// transport limits) and the point of the guard is catching
+// runaway payloads, not micro-accounting every block kind.
+//
+// The estimate is a lower bound: it ignores protocol framing,
+// JSON overhead, and the handful of small metadata fields on
+// each block. The practical effect is that the cap rejects
+// payloads whose "true" byte cost is somewhat higher than the
+// configured cap — always on the safe side of the guard.
+//
+// The function is pure and cheap: it iterates the slice once
+// and does a handful of integer additions. It does not allocate.
+func estimateResponseBytes(blocks []sdkmcp.Content) int64 {
+	var total int64
+	for _, block := range blocks {
+		switch v := block.(type) {
+		case *sdkmcp.TextContent:
+			total += int64(len(v.Text))
+		case *sdkmcp.ImageContent:
+			total += int64(len(v.Data))
+		case *sdkmcp.AudioContent:
+			total += int64(len(v.Data))
+		}
+	}
+	return total
 }
 
 // Definitions returns the composed tool definitions produced at
