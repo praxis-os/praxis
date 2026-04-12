@@ -4,6 +4,7 @@ package mcp
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -164,6 +165,126 @@ func TestMetricsRecordMCPCallOnIsError(t *testing.T) {
 	}
 	if len(rec.transportErrors) != 0 {
 		t.Errorf("RecordMCPTransportError count = %d, want 0 (IsError is tool-level, not transport)", len(rec.transportErrors))
+	}
+}
+
+// TestMetricsTransportErrorEmitted exercises the transport-error
+// counter emission path: when the SDK handler returns an error
+// (not IsError=true, but a Go error from the handler), the
+// classifier maps it to a sub-kind and the adapter emits both
+// RecordMCPCall(status="error") and RecordMCPTransportError.
+func TestMetricsTransportErrorEmitted(t *testing.T) {
+	t.Parallel()
+
+	rec := &fakeRecorder{}
+	specs := []serverSpec{{
+		logicalName: "charlie",
+		tools: []toolSpec{{
+			name: "failing",
+			handler: func(_ context.Context, _ *sdkmcp.CallToolRequest) (*sdkmcp.CallToolResult, error) {
+				// Return a Go error (not IsError=true). The SDK
+				// propagates this as a JSON-RPC internal error,
+				// which the classifier maps to ServerError.
+				return nil, fmt.Errorf("handler explosion")
+			},
+		}},
+	}}
+
+	inv, err := New(context.Background(),
+		[]Server{validServer("charlie")},
+		withSessionOpener(openSessionsWithTools(specs)),
+		WithMetricsRecorder(rec),
+	)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer func() { _ = inv.Close() }()
+
+	_, _ = inv.Invoke(context.Background(), tools.InvocationContext{}, tools.ToolCall{
+		CallID: "c-fail",
+		Name:   "charlie__failing",
+	})
+
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+
+	// The handler returns a Go error, which surfaces as a
+	// CallTool SDK error. The classifier sees a JSON-RPC
+	// internal error and maps it to ServerError. ServerError
+	// does NOT trigger RecordMCPTransportError (per the D115
+	// emission rules: transport-error counter only for
+	// Network/CircuitOpen/SchemaViolation).
+	if len(rec.calls) != 1 {
+		t.Fatalf("RecordMCPCall count = %d, want 1", len(rec.calls))
+	}
+	if rec.calls[0].status != "error" {
+		t.Errorf("status = %q, want %q", rec.calls[0].status, "error")
+	}
+	// ServerError → no transport error emission
+	if len(rec.transportErrors) != 0 {
+		t.Errorf("RecordMCPTransportError count = %d, want 0 (ServerError is not transport-level)", len(rec.transportErrors))
+	}
+}
+
+// TestMetricsTransportErrorOnContextCancel exercises the
+// transport-error counter for the Network sub-kind path:
+// cancelling the context before CallTool completes triggers a
+// context.Canceled error, which the classifier maps to
+// ToolSubKindNetwork — a transport-originated sub-kind that
+// DOES trigger RecordMCPTransportError.
+func TestMetricsTransportErrorOnContextCancel(t *testing.T) {
+	t.Parallel()
+
+	rec := &fakeRecorder{}
+	specs := []serverSpec{{
+		logicalName: "delta",
+		tools: []toolSpec{{
+			name: "slow",
+			handler: func(ctx context.Context, _ *sdkmcp.CallToolRequest) (*sdkmcp.CallToolResult, error) {
+				// Block until the context is cancelled.
+				<-ctx.Done()
+				return nil, ctx.Err()
+			},
+		}},
+	}}
+
+	inv, err := New(context.Background(),
+		[]Server{validServer("delta")},
+		withSessionOpener(openSessionsWithTools(specs)),
+		WithMetricsRecorder(rec),
+	)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer func() { _ = inv.Close() }()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	// Cancel immediately so CallTool sees the cancellation.
+	cancel()
+
+	_, _ = inv.Invoke(ctx, tools.InvocationContext{}, tools.ToolCall{
+		CallID: "c-cancel",
+		Name:   "delta__slow",
+	})
+
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+
+	if len(rec.calls) != 1 {
+		t.Fatalf("RecordMCPCall count = %d, want 1", len(rec.calls))
+	}
+	if rec.calls[0].status != "error" {
+		t.Errorf("status = %q, want %q", rec.calls[0].status, "error")
+	}
+	// context.Canceled → ToolSubKindNetwork → transport error emitted
+	if len(rec.transportErrors) != 1 {
+		t.Fatalf("RecordMCPTransportError count = %d, want 1", len(rec.transportErrors))
+	}
+	if rec.transportErrors[0].kind != "network" {
+		t.Errorf("kind = %q, want %q", rec.transportErrors[0].kind, "network")
+	}
+	if rec.transportErrors[0].server != "delta" {
+		t.Errorf("server = %q, want %q", rec.transportErrors[0].server, "delta")
 	}
 }
 
