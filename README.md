@@ -37,6 +37,7 @@ application-level afterthoughts.
 - [Error handling](#error-handling)
 - [What praxis is](#what-praxis-is)
 - [Architecture at a glance](#architecture-at-a-glance)
+- [Tool integrations — MCP](#tool-integrations--mcp)
 - [v1.0 interface surface](#v10-interface-surface)
 - [Roadmap](#roadmap)
 - [Versioning and stability](#versioning-and-stability)
@@ -223,6 +224,50 @@ cancellation cannot silently erase audit history.
 For the full component diagram, the per-state transition rules, and the
 request lifecycle sequence, see
 [`docs/PRAXIS-SEED-CONTEXT.md`](docs/PRAXIS-SEED-CONTEXT.md) sections 4.1–4.5.
+
+---
+
+## Tool integrations — MCP
+
+The `praxis/mcp` sub-module adapts [Model Context Protocol](https://modelcontextprotocol.io)
+servers into the praxis `tools.Invoker` surface. Agents driven by the
+orchestrator can invoke MCP-exposed tools without any runtime plugin loading —
+all servers are pinned at construction time.
+
+```go
+import "github.com/praxis-os/praxis/mcp"
+
+inv, err := mcp.New(ctx, []mcp.Server{
+    {LogicalName: "github", Transport: mcp.TransportStdio{Command: "mcp-github"}},
+}, mcp.WithResolver(myResolver))
+
+defer inv.Close()
+
+// inv satisfies tools.Invoker — plug it directly into the orchestrator.
+// inv.Definitions() returns []llm.ToolDefinition for llm request wiring.
+```
+
+Key properties:
+
+- **Transports:** stdio and Streamable HTTP (D108).
+- **Tool namespacing:** `{LogicalName}__{mcpToolName}` — deterministic, LLM-safe (D111).
+- **Error taxonomy:** MCP failures map to the existing `ErrorKindTool` sub-kinds
+  (Network, CircuitOpen, SchemaViolation, ServerError) — no new error kinds (D113).
+- **Content flattening:** text-only, `\n\n`-joined; non-text blocks silently dropped (D114).
+- **Budget participation:** MCP calls count against `tool_calls` and `wall_clock` via the
+  orchestrator's existing accounting — no new budget dimension (D112).
+- **Trust boundary:** the MCP transport edge is classified untrusted; `PostToolFilter`
+  applies verbatim to flattened results (D116).
+- **Observability:** optional `MCPMetricsRecorder` interface emits three bounded-cardinality
+  metrics (D115). Server cap: 32 per Invoker.
+
+The sub-module ships independently at its own semver line under tag prefix `mcp/vX.Y.Z`.
+
+**Examples:** [`examples/mcp/stdio/`](examples/mcp/stdio/) |
+[`examples/mcp/http/`](examples/mcp/http/)
+
+**Non-goals for v1.0.0:** runtime server discovery, sampling/elicitation passthrough,
+resource subscriptions, credential refresh (D120). See `docs/phase-7-mcp-integration/05-non-goals.md`.
 
 ---
 
