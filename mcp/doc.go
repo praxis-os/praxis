@@ -147,6 +147,54 @@
 // and the adapter-level zeroing implementation lives in
 // `mcp/internal/transport/credentials.go`.
 //
+// # Trust boundary classification (D116)
+//
+// The MCP transport edge — the boundary between the praxis process
+// and any external MCP server — is classified as a Phase 5
+// untrusted-output boundary. This means:
+//
+//   - Every [tools.ToolResult.Content] produced by the MCP adapter
+//     is untrusted by default and MUST pass through the caller's
+//     [hooks.PostToolFilter] before being treated as trusted output
+//     in the conversation history.
+//   - The adapter does NOT introduce any new filter, hook, or trust
+//     tier. The existing Phase 5 D77/D78 contracts apply verbatim
+//     to MCP-sourced results.
+//   - The adapter does NOT forward [tools.InvocationContext.SignedIdentity]
+//     to any MCP server. See D118 for the rationale. The JWT is
+//     never written to any MCP HTTP header, stdio environment
+//     variable, or JSON-RPC frame.
+//
+// Callers who deploy MCP servers from untrusted sources MUST
+// install a PostToolFilter that inspects the flattened Content for
+// prompt-injection markers, just as they would for any other
+// untrusted tool output. The adapter's content flattening (D114)
+// produces a plain-text string that is friendly to text-pattern
+// based injection detectors.
+//
+// # Known limitation OI-MCP-2: HTTP goroutine-scope isolation breach
+//
+// Phase 5 `02-credential-lifecycle.md` §3.2 states the credential
+// goroutine-scope isolation invariant: the Credential value is used
+// only within the goroutine that received it from Resolver.Fetch.
+// The HTTP transport path in the MCP adapter breaches this invariant:
+// the bearer-token string is handed to the underlying HTTP client
+// library, which maintains connection pools and keep-alive goroutines
+// that read the Authorization header during connection-reuse.
+//
+// The breach is structural and unavoidable — any HTTP client that
+// supports connection reuse will read auth headers from a background
+// goroutine. It is accepted as an architectural consequence of
+// supporting HTTP-backed MCP sessions and is classified at the same
+// "acceptable risk" tier as OI-MCP-1 (residual credential bytes in
+// Go strings).
+//
+// **OI-MCP-2 is the stable identifier for this deviation.** It is
+// documented in the D117 amendment (2026-04-10) in the Phase 7
+// decisions log and referenced in SECURITY.md. Callers with strict
+// goroutine-scope isolation requirements should use stdio transport
+// or build a custom HTTP adapter with KMS-backed proxy tokens.
+//
 // # Phase 7 scope (D106–D121)
 //
 //   - Transports: stdio and Streamable HTTP (D108).
