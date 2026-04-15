@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/praxis-os/praxis"
 	"github.com/praxis-os/praxis/budget"
@@ -21,6 +22,13 @@ import (
 const (
 	defaultMaxTurns = 10
 )
+
+// promptFragment is a named system-prompt fragment injected at construction
+// time (e.g. by skills.WithSkill via WithSystemPromptFragment).
+type promptFragment struct {
+	name string
+	text string
+}
 
 // Orchestrator runs agent invocations through the praxis state machine.
 //
@@ -47,6 +55,7 @@ type Orchestrator struct {
 	credentialResolver credentials.Resolver
 	identitySigner     identity.Signer
 	classifier         errors.Classifier
+	promptFragments    []promptFragment
 }
 
 // New creates an Orchestrator backed by the given provider.
@@ -101,6 +110,22 @@ func New(provider llm.Provider, opts ...Option) (*Orchestrator, error) {
 	}
 
 	return o, nil
+}
+
+// ComposedSystemPrompt returns the system prompt that would result from
+// composing the given base prompt with all registered prompt fragments.
+// This is a debug/test helper; it does not trigger an invocation.
+func (o *Orchestrator) ComposedSystemPrompt(base string) string {
+	if len(o.promptFragments) == 0 {
+		return base
+	}
+	var b strings.Builder
+	b.WriteString(base)
+	for _, f := range o.promptFragments {
+		b.WriteString("\n\n--- Skills ---\n\n")
+		b.WriteString(f.text)
+	}
+	return b.String()
 }
 
 // Invoke runs a single agent invocation and returns its result.

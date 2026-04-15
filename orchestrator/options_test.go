@@ -4,6 +4,7 @@ package orchestrator_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/praxis-os/praxis"
@@ -288,5 +289,111 @@ func TestNew_FirstNilOptionAbortsConstruction(t *testing.T) {
 	)
 	if err == nil {
 		t.Fatal("expected error from nil ToolInvoker option")
+	}
+}
+
+// --- WithSystemPromptFragment tests ---
+
+func TestWithSystemPromptFragment_SingleFragment(t *testing.T) {
+	o, err := orchestrator.New(
+		mock.NewSimple("ok"),
+		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithSystemPromptFragment("skill-a", "You are a code reviewer."),
+	)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	got := o.ComposedSystemPrompt("base prompt")
+	want := "base prompt\n\n--- Skills ---\n\nYou are a code reviewer."
+	if got != want {
+		t.Errorf("ComposedSystemPrompt:\n got: %q\nwant: %q", got, want)
+	}
+}
+
+func TestWithSystemPromptFragment_MultipleFragments_OrderPreserved(t *testing.T) {
+	o, err := orchestrator.New(
+		mock.NewSimple("ok"),
+		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithSystemPromptFragment("skill-a", "Fragment A"),
+		orchestrator.WithSystemPromptFragment("skill-b", "Fragment B"),
+	)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	got := o.ComposedSystemPrompt("")
+	want := "\n\n--- Skills ---\n\nFragment A\n\n--- Skills ---\n\nFragment B"
+	if got != want {
+		t.Errorf("ComposedSystemPrompt:\n got: %q\nwant: %q", got, want)
+	}
+}
+
+func TestWithSystemPromptFragment_NoFragments_ReturnsBase(t *testing.T) {
+	o, err := orchestrator.New(
+		mock.NewSimple("ok"),
+		orchestrator.WithDefaultModel("test-model"),
+	)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	got := o.ComposedSystemPrompt("base")
+	if got != "base" {
+		t.Errorf("ComposedSystemPrompt: got %q, want %q", got, "base")
+	}
+}
+
+func TestWithSystemPromptFragment_DuplicateName_Panics(t *testing.T) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatal("expected panic for duplicate fragment name")
+		}
+		msg, ok := r.(string)
+		if !ok {
+			t.Fatalf("panic value is %T, want string", r)
+		}
+		if !strings.Contains(msg, "duplicate") || !strings.Contains(msg, "skill-a") {
+			t.Errorf("panic message %q should mention 'duplicate' and 'skill-a'", msg)
+		}
+	}()
+
+	_, _ = orchestrator.New(
+		mock.NewSimple("ok"),
+		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithSystemPromptFragment("skill-a", "first"),
+		orchestrator.WithSystemPromptFragment("skill-a", "second"),
+	)
+}
+
+func TestWithSystemPromptFragment_FragmentReachesLLM(t *testing.T) {
+	// Verify that the composed system prompt reaches the LLM provider.
+	p := mock.NewSimple("response")
+	o, err := orchestrator.New(
+		p,
+		orchestrator.WithDefaultModel("test-model"),
+		orchestrator.WithSystemPromptFragment("reviewer", "Review code carefully."),
+	)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	result, err := o.Invoke(context.Background(), praxis.InvocationRequest{
+		SystemPrompt: "You are helpful.",
+		Messages:     []llm.Message{{Role: llm.RoleUser, Parts: []llm.MessagePart{llm.TextPart("hi")}}},
+	})
+	if err != nil {
+		t.Fatalf("Invoke: %v", err)
+	}
+	if result.FinalState != state.Completed {
+		t.Fatalf("FinalState: want Completed, got %v", result.FinalState)
+	}
+
+	calls := p.Calls()
+	if len(calls) == 0 {
+		t.Fatal("expected at least one LLM call")
+	}
+	gotPrompt := calls[0].SystemPrompt
+	wantPrompt := "You are helpful.\n\n--- Skills ---\n\nReview code carefully."
+	if gotPrompt != wantPrompt {
+		t.Errorf("LLM received SystemPrompt:\n got: %q\nwant: %q", gotPrompt, wantPrompt)
 	}
 }

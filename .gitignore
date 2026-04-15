@@ -5,6 +5,9 @@
 *.so
 *.dylib
 /minimal
+/http
+/stdio
+/skills
 
 # Test binary, built with `go test -c`
 *.test
