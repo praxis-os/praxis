@@ -216,3 +216,28 @@ func WithErrorClassifier(c errors.Classifier) Option {
 		return nil
 	}
 }
+
+// WithSystemPromptFragment appends a named system-prompt fragment that is
+// composed into the final system prompt at invocation time. Fragments are
+// concatenated in the order they are registered, separated by a
+// "--- Skills ---" marker.
+//
+// This is the integration seam used by sub-modules such as praxis/skills
+// (via [skills.WithSkill]) to inject skill instructions into the
+// orchestrator without modifying the frozen [praxis.InvocationRequest] or
+// [llm.LLMRequest] types.
+//
+// WithSystemPromptFragment panics if a fragment with the same name has
+// already been registered. This fail-loud behaviour prevents silent
+// shadowing of instruction fragments (D127).
+func WithSystemPromptFragment(name, fragment string) Option {
+	return func(o *Orchestrator) error {
+		for _, f := range o.promptFragments {
+			if f.name == name {
+				panic(fmt.Sprintf("orchestrator: duplicate system-prompt fragment name %q", name))
+			}
+		}
+		o.promptFragments = append(o.promptFragments, promptFragment{name: name, text: fragment})
+		return nil
+	}
+}

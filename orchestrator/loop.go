@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -49,6 +50,18 @@ func (o *Orchestrator) runLoop(
 	maxTurns int,
 	sink eventSink,
 ) (result *praxis.InvocationResult) {
+	// Compose system prompt from caller-supplied prompt + registered fragments (D128).
+	// req is by-value so this mutation is invisible to the caller.
+	if len(o.promptFragments) > 0 {
+		var b strings.Builder
+		b.WriteString(req.SystemPrompt)
+		for _, f := range o.promptFragments {
+			b.WriteString("\n\n--- Skills ---\n\n")
+			b.WriteString(f.text)
+		}
+		req.SystemPrompt = b.String()
+	}
+
 	machine := state.NewMachine()
 	now := time.Now
 
