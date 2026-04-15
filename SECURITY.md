@@ -61,6 +61,23 @@ key pattern but cannot redact by value. Callers must ensure that enricher values
 do not contain sensitive data that would be exposed if spans are exported to an
 untrusted backend.
 
+**OI-MCP-1 — Residual credential bytes in Go strings (praxis/mcp).**
+The MCP adapter's stdio and HTTP transport paths convert credential bytes to Go
+strings for `exec.Cmd.Env` and `http.Header` respectively. Go strings are
+immutable, so the adapter cannot zero the bytes the string points at after the
+conversion. The residual string lives in the Go runtime heap until GC collects
+it (typically within seconds). See `mcp/doc.go` for the full discussion.
+
+**OI-MCP-2 — HTTP goroutine-scope isolation breach (praxis/mcp).**
+The MCP adapter's HTTP transport path hands the bearer-token string to the
+stdlib HTTP client, which maintains connection-pool goroutines that read the
+`Authorization` header during connection reuse. This breaches the Phase 5
+goroutine-scope isolation invariant for credential material. The breach is
+structural and accepted as an architectural consequence of supporting
+HTTP-backed MCP sessions. Callers with strict isolation requirements should use
+stdio transport or KMS-backed proxy tokens. See the D117 amendment (2026-04-10)
+in the Phase 7 decisions log.
+
 ### Out of Scope
 
 The following are outside the scope of this policy:
