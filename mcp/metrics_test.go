@@ -15,6 +15,12 @@ import (
 	"github.com/praxis-os/praxis/tools"
 )
 
+// Test-local string constants to satisfy goconst.
+const (
+	wantTransportStdio = "stdio"
+	wantStatusError    = "error"
+)
+
 // fakeRecorder implements both telemetry.MetricsRecorder (core) and
 // MCPMetricsRecorder (extension) so it can be wired through
 // [WithMetricsRecorder] and discovered via the D115 type-assertion.
@@ -104,8 +110,8 @@ func TestMetricsRecordMCPCallOnSuccess(t *testing.T) {
 	if c.server != "alpha" {
 		t.Errorf("server = %q, want %q", c.server, "alpha")
 	}
-	if c.transport != "stdio" {
-		t.Errorf("transport = %q, want %q", c.transport, "stdio")
+	if c.transport != wantTransportStdio {
+		t.Errorf("transport = %q, want %q", c.transport, wantTransportStdio)
 	}
 	if c.status != "ok" {
 		t.Errorf("status = %q, want %q", c.status, "ok")
@@ -160,8 +166,8 @@ func TestMetricsRecordMCPCallOnIsError(t *testing.T) {
 	if len(rec.calls) != 1 {
 		t.Fatalf("RecordMCPCall count = %d, want 1", len(rec.calls))
 	}
-	if rec.calls[0].status != "error" {
-		t.Errorf("status = %q, want %q", rec.calls[0].status, "error")
+	if rec.calls[0].status != wantStatusError {
+		t.Errorf("status = %q, want %q", rec.calls[0].status, wantStatusError)
 	}
 	if len(rec.transportErrors) != 0 {
 		t.Errorf("RecordMCPTransportError count = %d, want 0 (IsError is tool-level, not transport)", len(rec.transportErrors))
@@ -217,8 +223,8 @@ func TestMetricsTransportErrorEmitted(t *testing.T) {
 	if len(rec.calls) != 1 {
 		t.Fatalf("RecordMCPCall count = %d, want 1", len(rec.calls))
 	}
-	if rec.calls[0].status != "error" {
-		t.Errorf("status = %q, want %q", rec.calls[0].status, "error")
+	if rec.calls[0].status != wantStatusError {
+		t.Errorf("status = %q, want %q", rec.calls[0].status, wantStatusError)
 	}
 	// ServerError → no transport error emission
 	if len(rec.transportErrors) != 0 {
@@ -273,8 +279,8 @@ func TestMetricsTransportErrorOnContextCancel(t *testing.T) {
 	if len(rec.calls) != 1 {
 		t.Fatalf("RecordMCPCall count = %d, want 1", len(rec.calls))
 	}
-	if rec.calls[0].status != "error" {
-		t.Errorf("status = %q, want %q", rec.calls[0].status, "error")
+	if rec.calls[0].status != wantStatusError {
+		t.Errorf("status = %q, want %q", rec.calls[0].status, wantStatusError)
 	}
 	// context.Canceled → ToolSubKindNetwork → transport error emitted
 	if len(rec.transportErrors) != 1 {
@@ -345,7 +351,7 @@ func TestTransportLabel(t *testing.T) {
 
 	stdio := Server{LogicalName: "a", Transport: TransportStdio{Command: "x"}}
 	if got := transportLabel(stdio); got != "stdio" {
-		t.Errorf("TransportStdio → %q, want %q", got, "stdio")
+		t.Errorf("TransportStdio → %q, want %q", got, wantTransportStdio)
 	}
 
 	http := Server{LogicalName: "b", Transport: TransportHTTP{URL: "http://localhost"}}

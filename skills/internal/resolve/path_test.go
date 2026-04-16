@@ -3,6 +3,7 @@
 package resolve_test
 
 import (
+	"os"
 	"testing"
 	"testing/fstest"
 
@@ -68,10 +69,44 @@ func TestOpenFile_Missing(t *testing.T) {
 }
 
 func TestResolvePath_Directory(t *testing.T) {
-	dir, file, err := resolve.ResolvePath("./testdata_resolve_dummy")
-	// This will fail because the directory doesn't exist, which is expected.
+	dir := t.TempDir()
+
+	gotDir, gotFile, err := resolve.ResolvePath(dir)
+	if err != nil {
+		t.Fatalf("ResolvePath(%q): %v", dir, err)
+	}
+	if gotDir != dir {
+		t.Errorf("dir = %q, want %q", gotDir, dir)
+	}
+	wantFile := dir + "/" + resolve.SkillFileName
+	if gotFile != wantFile {
+		t.Errorf("file = %q, want %q", gotFile, wantFile)
+	}
+}
+
+func TestResolvePath_File(t *testing.T) {
+	dir := t.TempDir()
+	file := dir + "/SKILL.md"
+	if err := os.WriteFile(file, []byte("content"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	gotDir, gotFile, err := resolve.ResolvePath(file)
+	if err != nil {
+		t.Fatalf("ResolvePath(%q): %v", file, err)
+	}
+	if gotDir != dir {
+		t.Errorf("dir = %q, want %q", gotDir, dir)
+	}
+	if gotFile != file {
+		t.Errorf("file = %q, want %q", gotFile, file)
+	}
+}
+
+func TestResolvePath_NotExist(t *testing.T) {
+	_, _, err := resolve.ResolvePath("/nonexistent/path/that/does/not/exist")
 	if err == nil {
-		t.Logf("dir=%s file=%s (only passes if testdata_resolve_dummy exists)", dir, file)
+		t.Error("expected error for nonexistent path")
 	}
 }
 

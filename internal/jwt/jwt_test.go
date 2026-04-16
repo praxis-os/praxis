@@ -11,6 +11,11 @@ import (
 	"time"
 )
 
+const (
+	wantAlg = "EdDSA"
+	wantTyp = "JWT"
+)
+
 // decodeToken is a test helper that splits a compact JWT and base64url-decodes
 // header and payload into maps. It does NOT verify the signature — that is
 // done separately in TestEncode_SignatureVerification.
@@ -64,11 +69,11 @@ func TestEncode_Header(t *testing.T) {
 
 	header, _ := decodeToken(t, token)
 
-	if got := header["alg"]; got != "EdDSA" {
-		t.Errorf("alg = %q, want %q", got, "EdDSA")
+	if got := header["alg"]; got != wantAlg {
+		t.Errorf("alg = %q, want %q", got, wantAlg)
 	}
-	if got := header["typ"]; got != "JWT" {
-		t.Errorf("typ = %q, want %q", got, "JWT")
+	if got := header["typ"]; got != wantTyp {
+		t.Errorf("typ = %q, want %q", got, wantTyp)
 	}
 	if len(header) != 2 {
 		t.Errorf("header has %d keys, want exactly 2", len(header))
@@ -87,11 +92,11 @@ func TestEncode_HeaderWithKeyID(t *testing.T) {
 
 	header, _ := decodeToken(t, token)
 
-	if got := header["alg"]; got != "EdDSA" {
-		t.Errorf("alg = %q, want %q", got, "EdDSA")
+	if got := header["alg"]; got != wantAlg {
+		t.Errorf("alg = %q, want %q", got, wantAlg)
 	}
-	if got := header["typ"]; got != "JWT" {
-		t.Errorf("typ = %q, want %q", got, "JWT")
+	if got := header["typ"]; got != wantTyp {
+		t.Errorf("typ = %q, want %q", got, wantTyp)
 	}
 	if got := header["kid"]; got != "my-key-id" {
 		t.Errorf("kid = %q, want %q", got, "my-key-id")
@@ -442,6 +447,212 @@ func TestClaimConstants(t *testing.T) {
 				t.Errorf("%s = %q, want %q", tc.name, got, tc.value)
 			}
 		})
+	}
+}
+
+// TestFixedHeader verifies that FixedHeader returns the pre-computed base64url
+// encoding of {"alg":"EdDSA","typ":"JWT"}.
+func TestFixedHeader(t *testing.T) {
+	got := FixedHeader()
+	if got == "" {
+		t.Fatal("FixedHeader() returned empty string")
+	}
+
+	raw, err := base64.RawURLEncoding.DecodeString(got)
+	if err != nil {
+		t.Fatalf("decode FixedHeader: %v", err)
+	}
+
+	var header map[string]string
+	if err := json.Unmarshal(raw, &header); err != nil {
+		t.Fatalf("unmarshal FixedHeader: %v", err)
+	}
+	if header["alg"] != wantAlg {
+		t.Errorf("alg = %q, want %q", header["alg"], wantAlg)
+	}
+	if header["typ"] != wantTyp {
+		t.Errorf("typ = %q, want %q", header["typ"], wantTyp)
+	}
+	if len(header) != 2 {
+		t.Errorf("header has %d keys, want 2", len(header))
+	}
+}
+
+// TestEncodeKidHeader_EscapeCharacters verifies that keyIDs containing
+// quote or backslash characters are handled via JSON marshalling (the
+// slow path) rather than string concatenation.
+func TestEncodeKidHeader_EscapeCharacters(t *testing.T) {
+	tests := []struct {
+		name  string
+		keyID string
+	}{
+		{"quote", `key"id`},
+		{"backslash", `key\id`},
+		{"both", `key\"id`},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := EncodeKidHeader(tc.keyID)
+			raw, err := base64.RawURLEncoding.DecodeString(got)
+			if err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			var header map[string]string
+			if err := json.Unmarshal(raw, &header); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			if header["kid"] != tc.keyID {
+				t.Errorf("kid = %q, want %q", header["kid"], tc.keyID)
+			}
+			if header["alg"] != wantAlg {
+				t.Errorf("alg = %q, want %q", header["alg"], wantAlg)
+			}
+			if header["typ"] != wantTyp {
+				t.Errorf("typ = %q, want %q", header["typ"], wantTyp)
+			}
+		})
+	}
+}
+
+// TestEncodeKidHeader_FastPath verifies that keyIDs without special
+// characters produce valid headers via the string concatenation path.
+func TestEncodeKidHeader_FastPath(t *testing.T) {
+	got := EncodeKidHeader("simple-key-42")
+	raw, err := base64.RawURLEncoding.DecodeString(got)
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	var header map[string]string
+	if err := json.Unmarshal(raw, &header); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if header["kid"] != "simple-key-42" {
+		t.Errorf("kid = %q, want %q", header["kid"], "simple-key-42")
+	}
+}
+
+// TestMarshalPayloadMap_AllFields exercises marshalPayloadMap with every
+// claim set, including Extra with time/non-string values.
+func TestMarshalPayloadMap_AllFields(t *testing.T) {
+	_, priv := generateKey(t)
+
+	now := time.Unix(1700000000, 0)
+	exp := now.Add(time.Hour)
+
+	claims := Claims{
+		Issuer:       "iss-val",
+		Subject:      "sub-val",
+		Audience:     []string{"aud-a", "aud-b"},
+		IssuedAt:     now,
+		Expiration:   exp,
+		InvocationID: "inv-001",
+		ToolName:     "my-tool",
+		ParentToken:  "parent.jwt",
+		JTI:          "jti-uuid",
+		Extra:        map[string]any{"custom": 42},
+	}
+
+	token, err := Encode(claims, priv, "")
+	if err != nil {
+		t.Fatalf("Encode: %v", err)
+	}
+
+	_, payload := decodeToken(t, token)
+
+	if got := payload[ClaimIssuer]; got != "iss-val" {
+		t.Errorf("iss = %v", got)
+	}
+	if got := payload[ClaimSubject]; got != "sub-val" {
+		t.Errorf("sub = %v", got)
+	}
+	if got := payload[ClaimInvocationID]; got != "inv-001" {
+		t.Errorf("invocation_id = %v", got)
+	}
+	if got := payload[ClaimToolName]; got != "my-tool" {
+		t.Errorf("tool_name = %v", got)
+	}
+	if got := payload[ClaimParentToken]; got != "parent.jwt" {
+		t.Errorf("parent_token = %v", got)
+	}
+	if got := payload[ClaimJTI]; got != "jti-uuid" {
+		t.Errorf("jti = %v", got)
+	}
+	if got := payload[ClaimIssuedAt]; got != float64(now.Unix()) {
+		t.Errorf("iat = %v, want %v", got, float64(now.Unix()))
+	}
+	if got := payload[ClaimExpiration]; got != float64(exp.Unix()) {
+		t.Errorf("exp = %v, want %v", got, float64(exp.Unix()))
+	}
+	if got := payload["custom"]; got != float64(42) {
+		t.Errorf("custom = %v, want 42", got)
+	}
+
+	// Verify audience is array.
+	arr, ok := payload[ClaimAudience].([]any)
+	if !ok {
+		t.Fatalf("aud: got %T, want []any", payload[ClaimAudience])
+	}
+	if len(arr) != 2 || arr[0] != "aud-a" || arr[1] != "aud-b" {
+		t.Errorf("aud = %v", arr)
+	}
+}
+
+// TestMarshalPayloadMap_SingleAudience verifies single-audience serialisation
+// when Extra claims force the map path.
+func TestMarshalPayloadMap_SingleAudience(t *testing.T) {
+	_, priv := generateKey(t)
+
+	claims := Claims{
+		Audience: []string{"only-one"},
+		Extra:    map[string]any{"force": "map-path"},
+	}
+
+	token, err := Encode(claims, priv, "")
+	if err != nil {
+		t.Fatalf("Encode: %v", err)
+	}
+
+	_, payload := decodeToken(t, token)
+
+	if got := payload[ClaimAudience]; got != "only-one" {
+		t.Errorf("aud = %v, want %q", got, "only-one")
+	}
+}
+
+// TestMarshalPayloadMap_EmptyAudience verifies that an empty audience is
+// omitted when Extra claims force the map path.
+func TestMarshalPayloadMap_EmptyAudience(t *testing.T) {
+	_, priv := generateKey(t)
+
+	claims := Claims{
+		Extra: map[string]any{"force": "map-path"},
+	}
+
+	token, err := Encode(claims, priv, "")
+	if err != nil {
+		t.Fatalf("Encode: %v", err)
+	}
+
+	_, payload := decodeToken(t, token)
+
+	if _, ok := payload[ClaimAudience]; ok {
+		t.Error("aud present for empty Audience, want omitted")
+	}
+}
+
+// TestEncode_JTI verifies that the JTI claim is serialised correctly.
+func TestEncode_JTI(t *testing.T) {
+	_, priv := generateKey(t)
+
+	claims := Claims{JTI: "unique-token-id"}
+	token, err := Encode(claims, priv, "")
+	if err != nil {
+		t.Fatalf("Encode: %v", err)
+	}
+
+	_, payload := decodeToken(t, token)
+	if got := payload[ClaimJTI]; got != "unique-token-id" {
+		t.Errorf("jti = %v, want %q", got, "unique-token-id")
 	}
 }
 

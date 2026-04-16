@@ -3,6 +3,7 @@
 package transport
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -61,7 +62,7 @@ func TestBuildHTTPTransportHappyPath(t *testing.T) {
 	// Exercise the round-tripper with a real HTTP request. The
 	// httptest server captures the resulting headers for
 	// inspection.
-	req, err := http.NewRequest(http.MethodPost, srv.URL, strings.NewReader(`{"jsonrpc":"2.0","id":1}`))
+	req, err := http.NewRequestWithContext(context.Background(),http.MethodPost, srv.URL, strings.NewReader(`{"jsonrpc":"2.0","id":1}`))
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
@@ -106,7 +107,7 @@ func TestBuildHTTPTransportNoCredential(t *testing.T) {
 		t.Fatalf("BuildHTTPTransport: %v", err)
 	}
 
-	req, _ := http.NewRequest(http.MethodGet, srv.URL, nil)
+	req, _ := http.NewRequestWithContext(context.Background(),http.MethodGet, srv.URL, nil)
 	resp, err := transport.HTTPClient.Do(req)
 	if err != nil {
 		t.Fatalf("HTTPClient.Do: %v", err)
@@ -198,7 +199,7 @@ func TestHeaderInjectingRoundTripperClonesRequest(t *testing.T) {
 		t.Fatalf("BuildHTTPTransport: %v", err)
 	}
 
-	req, _ := http.NewRequest(http.MethodGet, srv.URL, nil)
+	req, _ := http.NewRequestWithContext(context.Background(),http.MethodGet, srv.URL, nil)
 	// Caller's request starts with no headers.
 	if len(req.Header) != 0 {
 		t.Fatalf("test precondition: req.Header should be empty, got %v", req.Header)

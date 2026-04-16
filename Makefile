@@ -3,10 +3,8 @@
 .PHONY: test lint bench cover check banned-grep spdx-check fmt vet
 
 # Module paths that make targets operate on. Resolved through go.work so
-# both the core module (.) and the praxis/mcp sub-module are exercised by
-# every CI target. Add new sub-modules here when they ship (e.g.
-# `./skills/...` in v0.9.0).
-MODULE_PATHS := ./... ./mcp/...
+# core (.), praxis/mcp, and praxis/skills are exercised by every CI target.
+MODULE_PATHS := ./... ./mcp/... ./skills/...
 
 # Run all tests with race detection
 test:

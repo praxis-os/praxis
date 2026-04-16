@@ -7,7 +7,9 @@
 /minimal
 /http
 /stdio
+# Ignore the compiled example binary, not the skills/ sub-module directory.
 /skills
+!skills/
 
 # Test binary, built with `go test -c`
 *.test

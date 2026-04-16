@@ -14,8 +14,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.26.x"
-      - name: Run benchmarks
-        run: go test -bench=. -benchmem -count=5 ./... > bench-main.txt
+      - name: Run benchmarks (all modules)
+        run: go test -bench=. -benchmem -count=5 ./... ./mcp/... ./skills/... > bench-main.txt
       - name: Cache benchmark baseline
         uses: actions/cache/save@v4
         with:

@@ -64,9 +64,18 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.26.x"
-      - name: Run tests with coverage
+      - name: Run tests with coverage (all modules)
         run: |
-          go test -race -coverprofile=coverage.out -count=1 $(go list ./... | grep -v /examples/)
+          # Core module (excludes examples/).
+          go test -race -coverprofile=cov-core.out -count=1 $(go list ./... | grep -v /examples/)
+          # Sub-modules.
+          go test -race -coverprofile=cov-mcp.out  -count=1 ./mcp/...
+          go test -race -coverprofile=cov-skills.out -count=1 ./skills/...
+          # Merge profiles: strip duplicate mode lines, concatenate.
+          head -1 cov-core.out > coverage.out
+          tail -n +2 cov-core.out >> coverage.out
+          tail -n +2 cov-mcp.out >> coverage.out
+          tail -n +2 cov-skills.out >> coverage.out
       - name: Check coverage threshold (85%)
         run: |
           COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | tr -d '%')
@@ -262,8 +271,8 @@ jobs:
           path: bench-main.txt
           key: bench-main-${{ github.sha }}
           restore-keys: bench-main-
-      - name: Run benchmarks
-        run: go test -bench=. -benchmem -count=10 ./... | tee bench-new.txt
+      - name: Run benchmarks (all modules)
+        run: go test -bench=. -benchmem -count=10 ./... ./mcp/... ./skills/... | tee bench-new.txt
       - name: Install benchstat
         run: go install golang.org/x/perf/cmd/benchstat@latest
       - name: Compare with baseline

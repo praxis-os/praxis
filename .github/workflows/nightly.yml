@@ -25,7 +25,7 @@ jobs:
       - name: Run property-based tests (100k iterations)
         id: run-tests
         run: |
-          PRAXIS_PROP_ITERATIONS=100000 go test -race -count=1 ./... 2>&1 | tee test-output.txt
+          PRAXIS_PROP_ITERATIONS=100000 go test -race -count=1 ./... ./mcp/... ./skills/... 2>&1 | tee test-output.txt
       - name: Open issue on failure
         if: failure()
         uses: peter-evans/create-issue-from-file@v5
