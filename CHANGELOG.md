@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.0](https://github.com/praxis-os/praxis/compare/v0.9.1...v0.11.0) (2026-04-16)
+
+
+### Added
+
+* add Gemini, OpenRouter, Groq, and Ollama LLM providers ([#37](https://github.com/praxis-os/praxis/issues/37)) ([7c0875f](https://github.com/praxis-os/praxis/commit/7c0875fc5046d67edfee833ae48608bce2e0d331))
+
 ## [0.9.1](https://github.com/praxis-os/praxis/compare/v0.9.0...v0.9.1) (2026-04-16)
 
 
