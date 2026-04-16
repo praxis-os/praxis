@@ -11,6 +11,11 @@ import (
 	"time"
 )
 
+const (
+	wantAlg = "EdDSA"
+	wantTyp = "JWT"
+)
+
 // decodeToken is a test helper that splits a compact JWT and base64url-decodes
 // header and payload into maps. It does NOT verify the signature — that is
 // done separately in TestEncode_SignatureVerification.
@@ -64,11 +69,11 @@ func TestEncode_Header(t *testing.T) {
 
 	header, _ := decodeToken(t, token)
 
-	if got := header["alg"]; got != "EdDSA" {
-		t.Errorf("alg = %q, want %q", got, "EdDSA")
+	if got := header["alg"]; got != wantAlg {
+		t.Errorf("alg = %q, want %q", got, wantAlg)
 	}
-	if got := header["typ"]; got != "JWT" {
-		t.Errorf("typ = %q, want %q", got, "JWT")
+	if got := header["typ"]; got != wantTyp {
+		t.Errorf("typ = %q, want %q", got, wantTyp)
 	}
 	if len(header) != 2 {
 		t.Errorf("header has %d keys, want exactly 2", len(header))
@@ -87,11 +92,11 @@ func TestEncode_HeaderWithKeyID(t *testing.T) {
 
 	header, _ := decodeToken(t, token)
 
-	if got := header["alg"]; got != "EdDSA" {
-		t.Errorf("alg = %q, want %q", got, "EdDSA")
+	if got := header["alg"]; got != wantAlg {
+		t.Errorf("alg = %q, want %q", got, wantAlg)
 	}
-	if got := header["typ"]; got != "JWT" {
-		t.Errorf("typ = %q, want %q", got, "JWT")
+	if got := header["typ"]; got != wantTyp {
+		t.Errorf("typ = %q, want %q", got, wantTyp)
 	}
 	if got := header["kid"]; got != "my-key-id" {
 		t.Errorf("kid = %q, want %q", got, "my-key-id")
@@ -462,11 +467,11 @@ func TestFixedHeader(t *testing.T) {
 	if err := json.Unmarshal(raw, &header); err != nil {
 		t.Fatalf("unmarshal FixedHeader: %v", err)
 	}
-	if header["alg"] != "EdDSA" {
-		t.Errorf("alg = %q, want %q", header["alg"], "EdDSA")
+	if header["alg"] != wantAlg {
+		t.Errorf("alg = %q, want %q", header["alg"], wantAlg)
 	}
-	if header["typ"] != "JWT" {
-		t.Errorf("typ = %q, want %q", header["typ"], "JWT")
+	if header["typ"] != wantTyp {
+		t.Errorf("typ = %q, want %q", header["typ"], wantTyp)
 	}
 	if len(header) != 2 {
 		t.Errorf("header has %d keys, want 2", len(header))
@@ -499,11 +504,11 @@ func TestEncodeKidHeader_EscapeCharacters(t *testing.T) {
 			if header["kid"] != tc.keyID {
 				t.Errorf("kid = %q, want %q", header["kid"], tc.keyID)
 			}
-			if header["alg"] != "EdDSA" {
-				t.Errorf("alg = %q, want %q", header["alg"], "EdDSA")
+			if header["alg"] != wantAlg {
+				t.Errorf("alg = %q, want %q", header["alg"], wantAlg)
 			}
-			if header["typ"] != "JWT" {
-				t.Errorf("typ = %q, want %q", header["typ"], "JWT")
+			if header["typ"] != wantTyp {
+				t.Errorf("typ = %q, want %q", header["typ"], wantTyp)
 			}
 		})
 	}

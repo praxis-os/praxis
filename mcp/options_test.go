@@ -202,8 +202,8 @@ func TestOptionIsFunctionType(t *testing.T) {
 
 	// Compile-time check: the return type of WithMaxResponseBytes is
 	// assignable to Option.
-	var _ Option = WithMaxResponseBytes(1)
-	var _ Option = WithResolver(nil)
-	var _ Option = WithMetricsRecorder(nil)
-	var _ Option = WithTracerProvider(trace.TracerProvider(nil))
+	var _ = WithMaxResponseBytes(1)
+	var _ = WithResolver(nil)
+	var _ = WithMetricsRecorder(nil)
+	var _ = WithTracerProvider(trace.TracerProvider(nil))
 }

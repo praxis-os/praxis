@@ -91,6 +91,8 @@ type Result struct {
 
 // Parse extracts frontmatter and body from raw SKILL.md content.
 // Returns a [*ParseError] on failure with a classified [ErrorKind].
+//
+//nolint:gocyclo // Flat validation of 6+ optional fields is inherently branchy; splitting would hurt readability.
 func Parse(data []byte) (*Result, error) {
 	if len(data) > MaxFileSize {
 		return nil, malformed(fmt.Sprintf("file exceeds maximum size of %d bytes", MaxFileSize))

@@ -27,7 +27,7 @@ func BenchmarkResolvePath_Directory(b *testing.B) {
 func BenchmarkResolvePath_File(b *testing.B) {
 	dir := b.TempDir()
 	file := filepath.Join(dir, "SKILL.md")
-	if err := os.WriteFile(file, []byte("content"), 0644); err != nil {
+	if err := os.WriteFile(file, []byte("content"), 0600); err != nil {
 		b.Fatal(err)
 	}
 	b.ReportAllocs()

@@ -87,7 +87,7 @@ func TestResolvePath_Directory(t *testing.T) {
 func TestResolvePath_File(t *testing.T) {
 	dir := t.TempDir()
 	file := dir + "/SKILL.md"
-	if err := os.WriteFile(file, []byte("content"), 0644); err != nil {
+	if err := os.WriteFile(file, []byte("content"), 0600); err != nil {
 		t.Fatal(err)
 	}
 

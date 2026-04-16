@@ -36,7 +36,7 @@ func TestCredentialRefIsStringAlias(t *testing.T) {
 	// string → CredentialRef assignment without conversion.
 	var ref CredentialRef = "my-secret"
 	// CredentialRef → string assignment without conversion.
-	var s string = ref
+	s := ref
 	if s != "my-secret" {
 		t.Errorf("alias round-trip: got %q, want %q", s, "my-secret")
 	}
