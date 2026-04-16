@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.1](https://github.com/praxis-os/praxis/compare/v0.9.0...v0.9.1) (2026-04-16)
+
+
+### Testing
+
+* coverage fills, CI multi-module expansion, submodule benchmarks ([#34](https://github.com/praxis-os/praxis/issues/34)) ([d3e592d](https://github.com/praxis-os/praxis/commit/d3e592d3d568245716cc2bbab0f1735d7cd87e9e))
+
 ## 0.9.0 (2026-04-15)
 
 
