@@ -34,6 +34,7 @@ application-level afterthoughts.
 - [Prerequisites](#prerequisites)
 - [Install](#install)
 - [Quick start](#quick-start)
+- [Supported providers](#supported-providers)
 - [Error handling](#error-handling)
 - [What praxis is](#what-praxis-is)
 - [Architecture at a glance](#architecture-at-a-glance)
@@ -50,8 +51,14 @@ application-level afterthoughts.
 
 ## Prerequisites
 
-- Go 1.23 or later
-- An Anthropic API key (for the `llm/anthropic` adapter)
+- Go 1.26 or later
+- An API key for at least one supported provider:
+  - **Anthropic** (`llm/anthropic`) — Claude models
+  - **OpenAI** (`llm/openai`) — GPT models
+  - **Gemini** (`llm/gemini`) — Google Gemini models
+  - **OpenRouter** (`llm/openrouter`) — multi-provider routing
+  - **Groq** (`llm/groq`) — low-latency LPU inference
+  - **Ollama** (`llm/ollama`) — local models, no API key required
 
 ---
 
@@ -112,6 +119,53 @@ guard, no tool invoker. Wire in only what your workload requires.
 
 ---
 
+## Supported providers
+
+praxis ships six provider adapters. The `llm.Provider` interface is stable
+(frozen-v1.0) — any OpenAI-compatible service works via the `openai` package
+with `WithBaseURL`.
+
+| Package | Provider | Auth | Notes |
+|---|---|---|---|
+| `llm/anthropic` | Anthropic | `ANTHROPIC_API_KEY` | Claude models. Header auth (`x-api-key`). |
+| `llm/openai` | OpenAI | `OPENAI_API_KEY` | GPT models. Also works for Azure OpenAI via `WithBaseURL`. |
+| `llm/gemini` | Google Gemini | `GEMINI_API_KEY` | Gemini models. Query-param auth. Up to 1M context tokens. |
+| `llm/openrouter` | OpenRouter | `OPENROUTER_API_KEY` | Routes to many upstream models. Optional `WithReferer`/`WithTitle` headers. |
+| `llm/groq` | Groq | `GROQ_API_KEY` | Low-latency LPU inference. OpenAI-compatible. |
+| `llm/ollama` | Ollama | none | Local models. No API key required. Default: `localhost:11434`. |
+
+```go
+// Anthropic
+provider := anthropic.New(os.Getenv("ANTHROPIC_API_KEY"))
+
+// OpenAI
+provider := openai.New(os.Getenv("OPENAI_API_KEY"))
+
+// Gemini
+provider := gemini.New(os.Getenv("GEMINI_API_KEY"))
+
+// OpenRouter (multi-provider routing)
+provider := openrouter.New(os.Getenv("OPENROUTER_API_KEY"),
+    openrouter.WithModel("anthropic/claude-sonnet-4-20250514"),
+)
+
+// Groq (fast inference)
+provider := groq.New(os.Getenv("GROQ_API_KEY"))
+
+// Ollama (local, no key)
+provider := ollama.New(ollama.WithModel("llama3.2"))
+```
+
+All providers satisfy `llm.Provider` and plug directly into `orchestrator.New(provider)`.
+
+**Examples:** [`examples/minimal/`](examples/minimal/) |
+[`examples/openrouter/`](examples/openrouter/) |
+[`examples/groq/`](examples/groq/) |
+[`examples/ollama/`](examples/ollama/) |
+[`examples/gemini/`](examples/gemini/)
+
+---
+
 ## Error handling
 
 Every error returned by praxis implements `errors.TypedError`:
@@ -152,8 +206,8 @@ auditability, cost control, or security.
 
 - A typed, eleven-state invocation finite state machine with allow-listed
   transitions and property-based tests.
-- A provider-agnostic `llm.Provider` interface with a shipped Anthropic adapter
-  (OpenAI adapter in v0.3.0).
+- A provider-agnostic `llm.Provider` interface with six shipped adapters:
+  Anthropic, OpenAI, Gemini, OpenRouter, Groq, and Ollama (local models).
 - A four-phase policy hook model (`PreInvocation`, `PreLLMInput`,
   `PostToolOutput`, `PostInvocation`) plus pre-LLM and post-tool filter chains
   that can `Pass`, `Redact`, `Log`, or `Block`.
@@ -280,7 +334,7 @@ tests and examples.
 | Package | Interface | Purpose |
 |---|---|---|
 | `orchestrator` | `Orchestrator` | Public facade. `Invoke`. Fresh state machine per call. Safe for concurrent use. |
-| `llm` | `Provider` | Provider-agnostic adapter surface. `Complete`, `Stream`, `Name`, `Capabilities`. Shipped: `anthropic.Provider`. |
+| `llm` | `Provider` | Provider-agnostic adapter surface. `Complete`, `Stream`, `Name`, `Capabilities`. Shipped: `anthropic`, `openai`, `gemini`, `openrouter`, `groq`, `ollama`. |
 | `tools` | `Invoker` | Generic tool execution seam. Default: `NullInvoker`. |
 | `hooks` | `PolicyHook` | Policy evaluation at invocation lifecycle phases. Default: `AllowAllPolicyHook`. |
 | `hooks` | `PreLLMFilter`, `PostToolFilter` | Input and output filter chains. Decisions: `Pass`, `Redact`, `Log`, `Block`. Tool outputs are untrusted by contract. |
@@ -296,12 +350,14 @@ tests and examples.
 
 ## Roadmap
 
-| Tag | Scope |
-|---|---|
-| **v0.1.0** | Synchronous `Invoke`, full state machine, `anthropic.Provider`, typed errors, null defaults for tools/policy/filters/telemetry. |
-| **v0.3.0** | All public interfaces locked to v1.0-candidate shape. Hook and filter chain execution. `budget.Guard` with all four dimensions. `openai.Provider`. Property-based state machine tests in CI. |
-| **v0.5.0** | 85% coverage gate on public surface. Benchmarks: orchestrator overhead under 15 ms per invocation, state machine at 1 M transitions/sec/core. `identity.Ed25519Signer` reference impl. First production consumer ready. |
-| **v1.0.0** | Tagged after the first production consumer ships against `v0.5.x`. Interface surface frozen. Breaking changes require a `v2` module path. |
+| Tag | Status | Scope |
+|---|---|---|
+| **v0.1.0** | shipped | Synchronous `Invoke`, full state machine, `anthropic.Provider`, typed errors, null defaults for tools/policy/filters/telemetry. |
+| **v0.3.0** | shipped | All public interfaces locked to v1.0-candidate shape. Hook and filter chain execution. `budget.Guard` with all four dimensions. `openai.Provider`. Property-based state machine tests in CI. |
+| **v0.5.0** | shipped | 85% coverage gate on public surface. Benchmarks green. `identity.Ed25519Signer` reference impl. |
+| **v0.7.0** | shipped | `praxis/mcp` sub-module: stdio + Streamable HTTP transports, tool namespacing, credential flow, trust-boundary hardening. |
+| **v0.9.0** | shipped | `praxis/skills` sub-module: `SKILL.md` loader, `skills.Open` / `skills.Load`, `skills.WithSkill` orchestrator option. |
+| **v1.0.0** | next | API freeze after the first production consumer ships on `v0.9.x`. Breaking changes after this point require a `v2` module path. |
 
 ---
 
